@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reposición y rotación de mercadería</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#13201c; --paper:#f4f1ea; --surf:#ffffff; --line:#d8d3c6;
+    --moss:#3b5d4f; --moss-d:#27433a; --sand:#c9a86a; --clay:#b9603a;
+    --muted:#6f6a5e; --ok:#2f6b4f; --warn:#b07a1e; --bad:#a8402a; --chip:#ebe6da;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5}
+  header{background:var(--moss-d);color:#f4f1ea;padding:20px 28px;border-bottom:4px solid var(--sand)}
+  header h1{margin:0;font-size:22px;font-weight:600;letter-spacing:.3px}
+  header p{margin:4px 0 0;color:#c9d6cf;font-size:13px}
+  .wrap{max-width:1320px;margin:0 auto;padding:24px 28px 80px}
+  .step{background:var(--surf);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:20px}
+  .step h2{margin:0 0 4px;font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px}
+  .num{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--moss);
+    color:#fff;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:0 0 auto}
+  .step .desc{color:var(--muted);font-size:13px;margin:0 0 16px;padding-left:36px}
+  .uprow{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+  @media(max-width:1100px){.uprow{grid-template-columns:1fr 1fr}}
+  @media(max-width:640px){.uprow{grid-template-columns:1fr}}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;background:#fbfaf6;transition:.15s;cursor:pointer}
+  .drop:hover{border-color:var(--moss);background:#f3f6f3}
+  .drop.set{border-color:var(--ok);background:#eef5ef}
+  .drop .t{font-weight:600;font-size:13px}
+  .drop .s{color:var(--muted);font-size:12px;margin-top:4px}
+  .drop .fn{color:var(--ok);font-size:12px;margin-top:6px;font-weight:600;word-break:break-all}
+  .drop.opt .t::after{content:" (opcional)";color:var(--muted);font-weight:400;font-size:11px}
+  input[type=file]{display:none}
+  .params{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+  .field input,.field select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-size:14px;background:#fff;color:var(--ink)}
+  .field .hint{font-size:11px;color:var(--muted);margin-top:4px}
+  button.go{background:var(--clay);color:#fff;border:none;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
+  button.go:hover{background:#9d4f2e}
+  button.go:disabled{background:#c9c3b6;cursor:not-allowed}
+  button.sec{background:#fff;color:var(--moss-d);border:1px solid var(--moss);padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+  button.sec:hover{background:#eef5ef}
+  .equiv{display:none}
+  .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .tag.depo{background:#e4eef9;color:#23527c}
+  .tag.contra{background:#f4ecdc;color:#7a5a17}
+  .tag.excl{background:#f6e3de;color:#8a3622}
+  .tag.sale{background:#e5f1ea;color:#2f6b4f}
+  #results{display:none}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:14px;margin-bottom:20px}
+  .kpi{background:var(--surf);border:1px solid var(--line);border-left:4px solid var(--moss);border-radius:8px;padding:14px 16px}
+  .kpi .v{font-size:24px;font-weight:700}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .kpi.repo{border-left-color:var(--clay)}
+  .kpi.tras{border-left-color:var(--sand)}
+  .tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);flex-wrap:wrap}
+  .tab{padding:10px 16px;cursor:pointer;font-weight:600;font-size:14px;color:var(--muted);border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0}
+  .tab.active{background:var(--surf);color:var(--ink);border-color:var(--line);border-bottom:2px solid var(--surf);margin-bottom:-2px}
+  .panel{display:none;background:var(--surf);border:1px solid var(--line);border-radius:0 8px 8px 8px;padding:18px}
+  .panel.active{display:block}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .toolbar input,.toolbar select{padding:7px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px}
+  .toolbar input[type=search]{min-width:220px}
+  .grow{flex:1}
+  table.data{width:100%;border-collapse:collapse;font-size:13px}
+  table.data th{background:#f0ece2;text-align:left;padding:9px 10px;position:sticky;top:0;font-size:12px;text-transform:uppercase;letter-spacing:.3px;cursor:pointer;white-space:nowrap}
+  table.data th:hover{background:#e7e1d3}
+  table.data td{padding:8px 10px;border-bottom:1px solid #efece4}
+  table.data tr:hover td{background:#faf8f3}
+  .scroll{max-height:580px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .num-c{text-align:right;font-variant-numeric:tabular-nums}
+  .qty{font-weight:700;color:var(--clay)}
+  .pill{padding:1px 8px;border-radius:12px;font-size:11px;font-weight:600;background:var(--chip)}
+  .from{color:var(--bad);font-weight:600}
+  .to{color:var(--ok);font-weight:600}
+  .empty{text-align:center;color:var(--muted);padding:40px}
+  .err{background:#f6e3de;color:#8a3622;padding:12px 16px;border-radius:8px;margin-top:12px;font-size:13px;display:none}
+  .warnbox{background:#fbf3e0;border:1px solid #e3cd95;color:#7a5a17;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;display:none}
+  .warnbox b{display:block;margin-bottom:4px}
+  .warnbox ul{margin:4px 0 0;padding-left:20px}
+  .targinp{width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;font-size:12px;text-align:right}
+  .legend{font-size:12px;color:var(--muted);margin-top:10px;padding-left:36px}
+  .curve-cell{display:inline-block;min-width:26px;text-align:center;padding:2px 4px;margin:1px;border-radius:4px;font-size:12px;font-weight:600}
+  .curve-has{background:#e5f1ea;color:#2f6b4f}
+  .curve-zero{background:#f3f0e8;color:#b4b0a4}
+  .art-row{background:#f7f5ef;font-weight:600}
+  .art-row td{padding:10px;border-top:2px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Reposición y rotación de mercadería</h1>
+  <p>Cruza venta y stock · repone desde depósito · rota entre sucursales para completar curva donde hay venta</p>
+</header>
+
+<div class="wrap">
+
+  <div class="step">
+    <h2><span class="num">1</span> Subí los reportes de Dragonfish</h2>
+    <p class="desc">Con el <b>stock</b> solo ya podés trabajar: distribuye desde depósito y entre sucursales nivelando el stock, y arma las curvas de calzado. Si además subís la <b>venta del período</b>, calcula reposición y rotaciones según lo que se vende. La <b>venta del verano</b> habilita contra-temporada, y el <b>año anterior</b> la brecha estacional. La app acomoda sola los prototipos según lo que cargues.</p>
+    <div class="uprow">
+      <label class="drop" id="d-stock">
+        <input type="file" id="f-stock" accept=".xlsx,.xls,.csv">
+        <div class="t">Stock por base</div>
+        <div class="s">Artículo · Base · Color · Talle · Cantidad</div>
+        <div class="fn" id="fn-stock"></div>
+      </label>
+      <label class="drop" id="d-venta">
+        <input type="file" id="f-venta" accept=".xlsx,.xls,.csv">
+        <div class="t">Venta del período</div>
+        <div class="s">Tienda · Artículo · Color · Talle · Cantidad</div>
+        <div class="fn" id="fn-venta"></div>
+      </label>
+      <label class="drop opt" id="d-prev">
+        <input type="file" id="f-prev" accept=".xlsx,.xls,.csv">
+        <div class="t">Venta año anterior</div>
+        <div class="s">Mismo formato, misma época año pasado</div>
+        <div class="fn" id="fn-prev"></div>
+      </label>
+      <label class="drop opt" id="d-verano">
+        <input type="file" id="f-verano" accept=".xlsx,.xls,.csv">
+        <div class="t">Venta del verano</div>
+        <div class="s">Para distribuir contra-temporada</div>
+        <div class="fn" id="fn-verano"></div>
+      </label>
+    </div>
+    <div class="err" id="upload-err"></div>
+  </div>
+
+  <div class="step equiv" id="step-branches">
+    <h2><span class="num">2</span> Revisá las sucursales detectadas</h2>
+    <p class="desc">Asigná el rol de cada base. Si un nombre de venta no coincide con una base de stock, emparejalo en la última columna.</p>
+    <div id="branch-roles"></div>
+    <div class="legend">
+      <span class="tag sale">Vende</span> sucursal normal &nbsp;
+      <span class="tag depo">Depósito</span> repone a las demás &nbsp;
+      <span class="tag contra">Contra-temporada</span> no vende ni recibe &nbsp;
+      <span class="tag excl">Excluir</span> local cerrado / ignorar
+    </div>
+  </div>
+
+  <div class="step equiv" id="step-params">
+    <h2><span class="num">3</span> Parámetros de cálculo</h2>
+    <p class="desc">Valores por defecto según lo conversado. Ajustá según el reporte que cargaste.</p>
+    <div class="params">
+      <div class="field">
+        <label>Días del período de venta</label>
+        <input type="number" id="p-days" value="30" min="1">
+        <div class="hint">Cuántos días cubre el reporte de venta actual</div>
+      </div>
+      <div class="field">
+        <label>Talle vendido en cero</label>
+        <div style="padding-top:6px"><label style="font-weight:400;font-size:13px"><input type="checkbox" id="p-min1" checked> Reponer al menos 1</label></div>
+        <div class="hint">Si un talle vendió y la sucursal quedó sin stock, mandarle 1 aunque la cuenta dé menos</div>
+      </div>
+      <div class="field">
+        <label>Cobertura objetivo (días)</label>
+        <input type="number" id="p-cover" value="30" min="1">
+        <div class="hint">Stock futuro a cubrir en la reposición desde depósito</div>
+      </div>
+      <div class="field">
+        <label>Venta mínima destino</label>
+        <input type="number" id="p-minsale" value="1" min="1">
+        <div class="hint">Unidades vendidas para que un local reciba por rotación</div>
+      </div>
+      <div class="field">
+        <label>Meta sobre año anterior (%)</label>
+        <input type="number" id="p-growth" value="10" min="-50" max="200">
+        <div class="hint">% extra sobre lo vendido el año pasado</div>
+      </div>
+      <div class="field">
+        <label>Stock ideal: cobertura (días)</label>
+        <input type="number" id="p-ideal-cover" value="60" min="1">
+        <div class="hint">Días de venta que cubre el stock ideal por talle</div>
+      </div>
+      <div class="field">
+        <label>Colchón para donar (%)</label>
+        <input type="number" id="p-cushion" value="20" min="0" max="200">
+        <div class="hint">Cuánto debe superar el ideal para que una sucursal done</div>
+      </div>
+      <div class="field">
+        <label>Proveedor prioritario</label>
+        <input type="text" id="p-prio-prov" value="RIP">
+        <div class="hint">Su mercadería se repone primero a los locales de esa cadena (Rip Curl)</div>
+      </div>
+      <div class="field">
+        <label>Grupo de calzado</label>
+        <input type="text" id="p-calzado-grp" value="ZAPA">
+        <div class="hint">Grupo a usar en la pestaña de calzado</div>
+      </div>
+      <div class="field">
+        <label>Repetido = más de X por talle</label>
+        <input type="number" id="p-rep-umbral" value="2" min="1">
+        <div class="hint">Nivel objetivo en la pestaña "Distribución por stock"</div>
+      </div>
+      <div class="field">
+        <label>Contra-temporada: criterio</label>
+        <select id="p-contra-modo">
+          <option value="parejo">1 curva por vez, en orden de venta</option>
+          <option value="venta">Llenar primero a la que más vende</option>
+        </select>
+        <div class="hint">Por defecto: una curva completa a la que más vendió, después a la segunda, y así. La segunda vuelta arranca cuando todas tienen una</div>
+      </div>
+      <div class="field">
+        <label>Contra-temporada: máx por talle</label>
+        <input type="number" id="p-contra-max" value="2" min="1">
+        <div class="hint">Unidades máximas del MISMO talle que puede recibir una sucursal</div>
+      </div>
+      <div class="field">
+        <label>Par suelto = hasta X por talle</label>
+        <input type="number" id="p-suelto" value="1" min="1">
+        <div class="hint">Cuántos pares o menos se consideran "sueltos"</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;padding:14px;background:#f3f6f3;border:1px solid var(--line);border-radius:8px">
+      <div style="font-weight:600;margin-bottom:4px">Prototipos a ejecutar</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Marcá los que quieras correr y ponele el orden. <b>El stock se descuenta a medida que cada prototipo lo toma</b>, así una misma unidad nunca se compromete dos veces. El de orden 1 elige primero.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px" id="proto-selector">
+        <label class="bchip"><input type="checkbox" id="px-repo" checked> Reponer desde depósito &nbsp;<input class="targinp" type="number" id="po-repo" value="1" min="1" style="width:44px"></label>
+        <label class="bchip"><input type="checkbox" id="px-tras" checked> Rotar entre sucursales &nbsp;<input class="targinp" type="number" id="po-tras" value="2" min="1" style="width:44px"></label>
+        <label class="bchip"><input type="checkbox" id="px-calzado" checked> Calzado: unir pares &nbsp;<input class="targinp" type="number" id="po-calzado" value="3" min="1" style="width:44px"></label>
+        <label class="bchip"><input type="checkbox" id="px-contra" checked> Contra-temporada &nbsp;<input class="targinp" type="number" id="po-contra" value="4" min="1" style="width:44px"></label>
+        <label class="bchip"><input type="checkbox" id="px-pstock"> Distribución por stock &nbsp;<input class="targinp" type="number" id="po-pstock" value="5" min="1" style="width:44px"></label>
+        <label class="bchip"><input type="checkbox" id="px-movil"> Rotar inmovilizado &nbsp;<input class="targinp" type="number" id="po-movil" value="6" min="1" style="width:44px"></label>
+      </div>
+    </div>
+    <div style="margin-top:18px"><button class="go" id="run" disabled>Calcular plan</button></div>
+    <div class="err" id="calc-err"></div>
+  </div>
+
+  <div id="results">
+    <div style="background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <b style="font-size:13px">Guardar este plan en el historial:</b>
+      <input type="text" id="h-usuario" placeholder="Tu nombre" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;width:130px">
+      <input type="text" id="h-nota" placeholder="Nota (ej: envío contra-temporada agosto)" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;font-size:13px;flex:1;min-width:200px">
+      <button class="sec" id="h-guardar">Guardar</button>
+      <span id="h-estado" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="warnbox" id="warnbox"></div>
+    <div class="kpis" id="kpis"></div>
+
+    <div class="step" style="padding-top:14px">
+      <h2 style="margin-bottom:14px"><span class="num">4</span> Plan sugerido</h2>
+      <div class="tabs">
+        <div class="tab active" data-tab="tras">Rotar entre sucursales</div>
+        <div class="tab" data-tab="ideal">Rotación por stock ideal</div>
+        <div class="tab" data-tab="pstock">Distribución por stock</div>
+        <div class="tab" data-tab="calzado">Calzado: unir pares</div>
+        <div class="tab" data-tab="contra">Contra-temporada</div>
+        <div class="tab" data-tab="movil">Rotar inmovilizado</div>
+        <div class="tab" data-tab="curve">Por artículo (curva)</div>
+        <div class="tab" data-tab="repo">Reponer desde depósito</div>
+        <div class="tab" data-tab="nosale">Sin salida</div>
+        <div class="tab" data-tab="season">Brecha estacional</div>
+        <div class="tab" data-tab="dead">Stock parado</div>
+        <div class="tab" data-tab="hist">Historial</div>
+      </div>
+
+      <div class="panel active" id="panel-tras">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Cubre el faltante que el <b>depósito no alcanzó a reponer</b>, tomándolo de sucursales con stock por encima de su propia venta. Es el segundo paso del abastecimiento: primero depósito, después entre sucursales.</div>
+        <div class="toolbar">
+          <input type="search" id="s-tras" placeholder="Buscar artículo, origen, destino…">
+          <select id="fl-tras-dest"><option value="">Destino: todas</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="tras">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-tras"></table></div>
+      </div>
+
+      <div class="panel" id="panel-ideal">
+        <div style="background:#f3f6f3;border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px">
+          <div style="font-weight:600;margin-bottom:8px">Configuración del stock ideal</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">La app propone factores de tamaño por sucursal y curvas por grupo a partir de tus ventas. Ajustá lo que quieras y volvé a calcular. La rotación mueve solo el excedente sobre el ideal, así ninguna sucursal queda por debajo de su piso.</div>
+          <div style="display:flex;gap:24px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Factor de tamaño por sucursal</div>
+              <div id="factor-editor" class="branchbox"></div>
+            </div>
+            <div style="flex:1;min-width:280px">
+              <div style="font-size:12px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Curva ideal por grupo y talle (para sucursal promedio, factor 1.0)</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Editá los valores y tocá "Recalcular con esta configuración".</div>
+              <div id="curve-editor" style="max-height:200px;overflow:auto"></div>
+            </div>
+          </div>
+          <button class="sec" id="recalc-ideal" style="margin-top:12px">Recalcular con esta configuración</button>
+        </div>
+        <div class="toolbar">
+          <input type="search" id="s-ideal" placeholder="Buscar grupo, talle, origen, destino…">
+          <select id="fl-ideal-dest"><option value="">Destino: todas</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="ideal">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-ideal"></table></div>
+      </div>
+
+      <div class="panel" id="panel-pstock">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Distribuye <b>mirando solo el stock, sin venta</b>. Nivela los artículos repetidos: lo que supera el tope por talle se manda a las sucursales que menos tienen. Primero reparte el depósito, después las sucursales entre sí.</div>
+        <div class="toolbar">
+          <input type="search" id="s-pstock" placeholder="Buscar artículo, grupo, origen, destino…">
+          <select id="fl-pstock-tipo"><option value="">Origen: todos</option><option value="Depósito">Solo desde depósito</option><option value="Sucursal">Solo entre sucursales</option></select>
+          <select id="fl-pstock-dest"><option value="">Destino: todas</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="pstock">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-pstock"></table></div>
+      </div>
+
+      <div class="panel" id="panel-calzado">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Dos pasos: (1) junta los <b>pares sueltos</b> de cada modelo en la sucursal que ya tiene más pares, y (2) completa la curva <b>desde el depósito</b>, mandando solo los talles que a cada sucursal le faltan. Prioriza a las que están más cerca de completar.</div>
+        <div class="tabs" style="border-bottom:1px solid var(--line);margin-bottom:12px">
+          <div class="tab active" data-sub="calzado-res" style="font-size:13px;padding:6px 12px">Por modelo (curva)</div>
+          <div class="tab" data-sub="calzado-det" style="font-size:13px;padding:6px 12px">Detalle par por par</div>
+        </div>
+        <div class="toolbar">
+          <input type="search" id="s-calzado" placeholder="Buscar artículo, color, sucursal…">
+          <select id="fl-calzado-tipo"><option value="">Origen: todos</option><option value="Depósito">Solo desde depósito</option><option value="Sucursal">Solo entre sucursales</option></select>
+          <select id="fl-calzado-dest"><option value="">Destino: todas</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="calzado">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-calzado"></table></div>
+      </div>
+
+      <div class="panel" id="panel-contra">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Arma <b>curvas completas</b> (1 unidad de cada talle disponible) y manda cada curva <b>entera a una sucursal</b>, sin superar el tope de unidades del mismo talle. Lo que sobra va a otra sucursal, salvo que quede una sola unidad: esa se le anexa a la que recibió la curva. Solo participan las sucursales que vendieron ese grupo en verano.</div>
+        <div class="tabs" style="border-bottom:1px solid var(--line);margin-bottom:12px">
+          <div class="tab active" data-sub="contra-res" style="font-size:13px;padding:6px 12px">Por modelo</div>
+          <div class="tab" data-sub="contra-det" style="font-size:13px;padding:6px 12px">Detalle por talle</div>
+          <div class="tab" data-sub="contra-sob" style="font-size:13px;padding:6px 12px">Queda sin repartir</div>
+        </div>
+        <div class="toolbar">
+          <input type="search" id="s-contra" placeholder="Buscar artículo, grupo, sucursal…">
+          <select id="fl-contra-dest"><option value="">Destino: todas</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="contra">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-contra"></table></div>
+      </div>
+
+      <div class="panel" id="panel-movil">
+        <div class="toolbar">
+          <input type="search" id="s-movil" placeholder="Buscar artículo, grupo, origen, destino…">
+          <select id="fl-movil-dest"><option value="">Destino: todas</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="movil">Exportar a Excel</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Mercadería sin venta en su sucursal, repartida hacia las que sí la venden (proporcional a la venta de cada una).</div>
+        <div class="scroll"><table class="data" id="t-movil"></table></div>
+      </div>
+
+      <div class="panel" id="panel-curve">
+        <div class="toolbar">
+          <input type="search" id="s-curve" placeholder="Buscar artículo o descripción…">
+          <div class="grow"></div>
+          <button class="sec" data-export="curve">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-curve"></table></div>
+      </div>
+
+      <div class="panel" id="panel-repo">
+        <div class="toolbar">
+          <input type="search" id="s-repo" placeholder="Buscar artículo, sucursal…">
+          <select id="fl-repo-dest"><option value="">Todas las sucursales</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="repo">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-repo"></table></div>
+      </div>
+
+      <div class="panel" id="panel-nosale">
+        <div class="toolbar">
+          <input type="search" id="s-nosale" placeholder="Buscar artículo, grupo, sucursal…">
+          <select id="fl-nosale-grp"><option value="">Todos los grupos</option></select>
+          <div class="grow"></div>
+          <button class="sec" data-export="nosale">Exportar a Excel</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Artículos sin una sola venta en ninguna sucursal en el período. Candidatos a liquidación, contra-temporada o devolución (no se rotan).</div>
+        <div class="scroll"><table class="data" id="t-nosale"></table></div>
+      </div>
+
+      <div class="panel" id="panel-hist">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Los planes guardados quedan <b>compartidos</b>: los ve cualquiera que abra la app. Marcá dos para compararlos.</div>
+        <div class="toolbar">
+          <button class="sec" id="hist-refresh">Actualizar lista</button>
+          <div class="grow"></div>
+          <button class="sec" data-export="hist">Exportar a Excel</button>
+        </div>
+        <div id="hist-msg" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+        <div class="scroll" style="max-height:300px"><table class="data" id="t-hist"></table></div>
+        <div id="hist-comp" style="margin-top:16px"></div>
+      </div>
+
+      <div class="panel" id="panel-season">
+        <div class="toolbar">
+          <input type="search" id="s-season" placeholder="Buscar familia, grupo, sucursal…">
+          <div class="grow"></div>
+          <button class="sec" data-export="season">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-season"></table></div>
+      </div>
+
+      <div class="panel" id="panel-dead">
+        <div class="toolbar">
+          <input type="search" id="s-dead" placeholder="Buscar artículo, sucursal…">
+          <div class="grow"></div>
+          <button class="sec" data-export="dead">Exportar a Excel</button>
+        </div>
+        <div class="scroll"><table class="data" id="t-dead"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== HISTORIAL COMPARTIDO (Supabase) =====================
+// Si algun dia cambia el proyecto, se editan estas dos lineas y listo.
+const SUPA_URL='https://gadkxjbxujdcfifjvpxo.supabase.co';
+const SUPA_KEY='sb_publishable_SjlLbvdXH7VQV_9m9yvAyQ_v3iEbg7Z';
+const supaHeaders=()=>({'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'});
+async function supaGuardar(fila){
+  const r=await fetch(SUPA_URL+'/rest/v1/planes',{method:'POST',
+    headers:Object.assign(supaHeaders(),{'Prefer':'return=representation'}),body:JSON.stringify(fila)});
+  if(!r.ok) throw new Error('HTTP '+r.status+' - '+(await r.text()).slice(0,180));
+  return r.json();
+}
+async function supaListar(){
+  const r=await fetch(SUPA_URL+'/rest/v1/planes?select=*&order=fecha.desc&limit=100',{headers:supaHeaders()});
+  if(!r.ok) throw new Error('HTTP '+r.status+' - '+(await r.text()).slice(0,180));
+  return r.json();
+}
+async function supaBorrar(id){
+  const r=await fetch(SUPA_URL+'/rest/v1/planes?id=eq.'+id,{method:'DELETE',headers:supaHeaders()});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+}
+const N = s => (s===null||s===undefined?'':String(s)).trim().toUpperCase().replace(/\s+/g,' ');
+const files={stock:null,venta:null,prev:null,verano:null};
+let DATA={stock:[],venta:[],prev:[],verano:[]};
+let branchRoles={};
+let RESULT=null;
+let RESULT_CONFIG=null;
+
+function readFile(file,cb){
+  const r=new FileReader();
+  r.onload=e=>{try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    // Leemos como matriz para controlar los ENCABEZADOS nosotros: los reportes de Dragonfish
+    // pueden traer dos columnas con el MISMO nombre (ej: 'Descripción' dos veces, familia y grupo).
+    // Si dejamos que la libreria arme los objetos sola, una pisa a la otra y perdemos una columna.
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(!aoa.length){cb(null,[]);return;}
+    const seen={};
+    const hdr=(aoa[0]||[]).map((h,i)=>{
+      let name=String(h==null?'':h).trim();
+      if(!name) name='col'+i;
+      if(seen[name]==null){seen[name]=0;return name;}
+      seen[name]++; return name+'.'+seen[name];   // 'Descripción' -> 'Descripción.1'
+    });
+    const rows=[];
+    for(let i=1;i<aoa.length;i++){
+      const a=aoa[i]; if(!a||!a.length)continue;
+      let vacia=true; for(let j=0;j<a.length;j++){if(a[j]!==''&&a[j]!=null){vacia=false;break;}}
+      if(vacia)continue;
+      const o={}; hdr.forEach((h,j)=>{o[h]=(a[j]===undefined||a[j]===null)?'':a[j];});
+      rows.push(o);
+    }
+    cb(null,rows);
+  }catch(err){cb(err);}};
+  r.onerror=()=>cb(new Error('No se pudo leer el archivo'));
+  r.readAsArrayBuffer(file);
+}
+function pickCol(cols,cands){
+  const low=cols.map(c=>c.toLowerCase());
+  for(const cand of cands){const i=low.findIndex(c=>c.includes(cand));if(i>=0)return cols[i];}
+  return null;
+}
+function mapStock(rows){
+  if(!rows.length)throw new Error('El archivo de stock está vacío');
+  const cols=Object.keys(rows[0]);
+  const low=cols.map(x=>x.toLowerCase().trim());
+  const exact=n=>{const i=low.indexOf(n);return i>=0?cols[i]:null;};
+  const c={art:pickCol(cols,['artículo','articulo','codigo','código']),
+    desc:pickCol(cols,['artículo descripción','articulo descripcion'])||pickCol(cols,['descripción del','descripcion del']),
+    fam:pickCol(cols,['familia']),grp:pickCol(cols,['grupo']),prov:pickCol(cols,['proveedor']),
+    base:pickCol(cols,['base','sucursal','tienda','local']),color:pickCol(cols,['color']),
+    talle:pickCol(cols,['talle','talla']),cant:pickCol(cols,['cantidad','stock','existencia'])};
+  // Algunos reportes no traen Familia/Grupo sino 'Descripción' (familia) y 'Descripción.1' (grupo)
+  if(!c.fam) c.fam=exact('descripción')||exact('descripcion');
+  if(!c.grp) c.grp=exact('descripción.1')||exact('descripcion.1');
+  if(!c.desc) c.desc=pickCol(cols,['descripción','descripcion']);
+  if(!c.art||!c.base||!c.cant)throw new Error('Stock: faltan columnas Artículo / Base / Cantidad');
+  return rows.map(r=>({art:N(r[c.art]),desc:String(r[c.desc]||'').trim(),fam:N(r[c.fam]),grp:N(r[c.grp]),
+    prov:N(r[c.prov]),loc:N(r[c.base]),color:N(r[c.color]),talle:N(r[c.talle]),qty:Number(r[c.cant])||0})).filter(r=>r.art);
+}
+function mapVenta(rows){
+  if(!rows.length)throw new Error('El archivo de venta está vacío');
+  const cols=Object.keys(rows[0]);
+  const descCols=cols.filter(c=>c.toLowerCase().includes('descrip'));
+  // Si el reporte trae una columna de COLOR propia (nombre o codigo), esa manda.
+  // Si no, se asume que el color es la SEGUNDA columna de 'descripcion' (formato viejo de Dragonfish).
+  const colorCol=pickCol(cols,['color'])||(descCols.length>1?descCols[descCols.length-1]:null);
+  const c={tienda:pickCol(cols,['tienda','sucursal','base','local']),
+    art:pickCol(cols,['artículo','articulo','codigo','código']),
+    desc:descCols.length?descCols[0]:pickCol(cols,['descripción','descripcion']),
+    fam:pickCol(cols,['familia']),grp:pickCol(cols,['grupo']),prov:pickCol(cols,['proveedor']),
+    color:colorCol,talle:pickCol(cols,['talle','talla']),cant:pickCol(cols,['cantidad','unidades','vendido'])};
+  if(!c.tienda||!c.art||!c.cant)throw new Error('Venta: faltan columnas Tienda / Artículo / Cantidad');
+  return rows.map(r=>({loc:N(r[c.tienda]),art:N(r[c.art]),desc:String(r[c.desc]||'').trim(),fam:N(r[c.fam]),
+    grp:N(r[c.grp]),prov:N(r[c.prov]),color:N(r[c.color]),talle:N(r[c.talle]),qty:Number(r[c.cant])||0})).filter(r=>r.art);
+}
+function setupDrop(key,mapper){
+  const inp=document.getElementById('f-'+key),box=document.getElementById('d-'+key);
+  inp.addEventListener('change',()=>{
+    const file=inp.files[0];if(!file)return;
+    readFile(file,(err,rows)=>{
+      const eb=document.getElementById('upload-err');eb.style.display='none';
+      if(err){eb.textContent='Error leyendo '+file.name+': '+err.message;eb.style.display='block';return;}
+      try{DATA[key]=mapper(rows);files[key]=file.name;
+        document.getElementById('fn-'+key).textContent='✓ '+file.name+' ('+DATA[key].length+' filas)';
+        box.classList.add('set');ajustarPrototipos();onFilesChanged();
+      }catch(e){eb.textContent=e.message;eb.style.display='block';}
+    });
+  });
+}
+setupDrop('stock',mapStock);setupDrop('venta',mapVenta);setupDrop('prev',mapVenta);setupDrop('verano',mapVenta);
+
+const KNOWN={'DEPO':'depo','COMARCA':'contra','MODA':'excl'};
+const KNOWN_CADENA={'RCJUMBO':'ripcurl','RIPCOTO':'ripcurl'};
+const defaultTarget=loc=>(loc==='JUMBO'||loc==='RCJUMBO')?4000:5000;
+
+let infoPuente=null, infoCruce=null;
+function chequearCruce(){
+  // Avisa si los COLORES de stock y venta no coinciden: pasa cuando un reporte trae
+  // el nombre y el otro el codigo, o cuando uno guarda '05' como texto y el otro como numero 5.
+  const fuentes=[...(DATA.venta||[]),...(DATA.verano||[]),...(DATA.prev||[])];
+  if(!fuentes.length||!DATA.stock.length)return null;
+  const cs=new Set(DATA.stock.map(r=>r.color).filter(Boolean));
+  const cv=new Set(fuentes.map(r=>r.color).filter(Boolean));
+  if(!cs.size||!cv.size)return {vacio:true};
+  let com=0; cv.forEach(c=>{if(cs.has(c))com++;});
+  const pct=com/cv.size;
+  if(pct>=0.5)return null;
+  return {pct:Math.round(pct*100),ejStock:[...cs].slice(0,3).join(', '),ejVenta:[...cv].slice(0,3).join(', ')};
+}
+function armonizarGrupos(){
+  // Si el stock trae los grupos con NOMBRE LARGO ('BERMUDA ALGODON') y la venta con
+  // CODIGO CORTO ('BER ALG'), aprende la equivalencia con los articulos que estan en ambos
+  // y traduce el stock, para que se puedan cruzar.
+  const fuentes=[...(DATA.venta||[]),...(DATA.verano||[]),...(DATA.prev||[])];
+  if(!fuentes.length||!DATA.stock.length)return null;
+  const gStock=new Set(DATA.stock.map(r=>r.grp).filter(Boolean));
+  const gVenta=new Set(fuentes.map(r=>r.grp).filter(Boolean));
+  if(!gStock.size)return null;
+  let comunes=0; gStock.forEach(g=>{if(gVenta.has(g))comunes++;});
+  if(comunes/gStock.size>0.5)return null;   // ya coinciden: no hay nada que traducir
+  const artGrp={},artFam={};
+  fuentes.forEach(r=>{if(r.art&&r.grp&&!artGrp[r.art])artGrp[r.art]=r.grp;
+    if(r.art&&r.fam&&!artFam[r.art])artFam[r.art]=r.fam;});
+  const votosG={},votosF={};
+  DATA.stock.forEach(r=>{
+    const cg=artGrp[r.art]; if(r.grp&&cg){(votosG[r.grp]||={});votosG[r.grp][cg]=(votosG[r.grp][cg]||0)+1;}
+    const cf=artFam[r.art]; if(r.fam&&cf){(votosF[r.fam]||={});votosF[r.fam][cf]=(votosF[r.fam][cf]||0)+1;}});
+  const mejor=o=>Object.entries(o).sort((a,b)=>b[1]-a[1])[0][0];
+  const pG={},pF={};
+  Object.entries(votosG).forEach(([k,v])=>{pG[k]=mejor(v);});
+  Object.entries(votosF).forEach(([k,v])=>{pF[k]=mejor(v);});
+  let filas=0;
+  DATA.stock.forEach(r=>{if(pG[r.grp]){r.grp=pG[r.grp];filas++;} if(pF[r.fam]){r.fam=pF[r.fam];}});
+  const sinTrad=[...gStock].filter(g=>!pG[g]);
+  return {grupos:Object.keys(pG).length,filas,sinTrad};
+}
+function ajustarPrototipos(){
+  // Acomoda los prototipos segun lo que haya cargado: no tiene sentido dejar activo
+  // uno que necesita venta si no hay venta, ni dejar afuera la nivelacion por stock
+  // cuando es lo unico que puede repartir.
+  const hayVenta=(DATA.venta||[]).length>0, hayVerano=(DATA.verano||[]).length>0;
+  const set=(id,v)=>{const e=document.getElementById('px-'+id); if(e)e.checked=v;};
+  set('repo',hayVenta);          // necesita venta actual
+  set('tras',hayVenta);          // idem
+  set('contra',hayVerano);       // necesita venta de verano
+  set('calzado',true);           // solo necesita stock
+  set('pstock',!hayVenta);       // sin venta, la nivelacion por stock es la que reparte
+  set('movil',false);            // criterio alternativo, se activa a mano
+}
+function onFilesChanged(){
+  if(!DATA.stock.length)return;   // con el stock solo ya se puede trabajar
+  const locs=new Set();
+  DATA.stock.forEach(r=>locs.add(r.loc));DATA.venta.forEach(r=>locs.add(r.loc));
+  if(DATA.prev)DATA.prev.forEach(r=>locs.add(r.loc));
+  if(DATA.verano)DATA.verano.forEach(r=>locs.add(r.loc));
+  const inStock=new Set(DATA.stock.map(r=>r.loc)),inVenta=new Set([...DATA.venta.map(r=>r.loc),...(DATA.verano||[]).map(r=>r.loc)]);
+  const all=[...locs].filter(l=>l).sort();
+  all.forEach(l=>{if(!branchRoles[l])branchRoles[l]={role:KNOWN[l]||'sale',mapTo:'',target:defaultTarget(l),cadena:KNOWN_CADENA[l]||'otra'};
+    if(branchRoles[l].cadena==null)branchRoles[l].cadena=KNOWN_CADENA[l]||'otra';});
+  const r=armonizarGrupos(); if(r)infoPuente=r;
+  infoCruce=chequearCruce();
+  const stockLocs=[...inStock].sort();
+  let html='<table style="width:100%;border-collapse:collapse"><tr style="border-bottom:2px solid var(--line)">'+
+    '<th style="text-align:left;padding:8px;font-size:12px">Base / Tienda</th>'+
+    '<th style="text-align:left;padding:8px;font-size:12px">Aparece en</th>'+
+    '<th style="text-align:left;padding:8px;font-size:12px">Rol</th>'+
+    '<th style="text-align:left;padding:8px;font-size:12px">Cadena</th>'+
+    '<th style="text-align:left;padding:8px;font-size:12px">Stock objetivo</th>'+
+    '<th style="text-align:left;padding:8px;font-size:12px">Si no coincide, es la misma que…</th></tr>';
+  all.forEach(l=>{
+    const inS=inStock.has(l),inV=inVenta.has(l);
+    const where=(inS&&inV)?'<span class="pill">venta + stock</span>':inS?'<span class="pill" style="background:#e4eef9">solo stock</span>':'<span class="pill" style="background:#f4ecdc">solo venta</span>';
+    const needMap=!(inS&&inV)&&branchRoles[l].role==='sale';
+    let opts='<option value="">—</option>';
+    stockLocs.filter(s=>s!==l).forEach(s=>{opts+=`<option value="${s}" ${branchRoles[l].mapTo===s?'selected':''}>${s}</option>`;});
+    html+=`<tr style="border-bottom:1px solid var(--line)">
+      <td style="padding:8px;font-weight:600">${l}</td><td style="padding:8px">${where}</td>
+      <td style="padding:8px"><select onchange="setRole('${l}','role',this.value)">
+        <option value="sale" ${branchRoles[l].role==='sale'?'selected':''}>Vende</option>
+        <option value="depo" ${branchRoles[l].role==='depo'?'selected':''}>Depósito</option>
+        <option value="contra" ${branchRoles[l].role==='contra'?'selected':''}>Contra-temporada</option>
+        <option value="excl" ${branchRoles[l].role==='excl'?'selected':''}>Excluir</option></select></td>
+      <td style="padding:8px"><select onchange="setRole('${l}','cadena',this.value)" ${branchRoles[l].role!=='sale'?'disabled style="opacity:.4"':''}>
+        <option value="ripcurl" ${branchRoles[l].cadena==='ripcurl'?'selected':''}>Rip Curl</option>
+        <option value="valentino" ${branchRoles[l].cadena==='valentino'?'selected':''}>Valentino</option>
+        <option value="otra" ${branchRoles[l].cadena==='otra'?'selected':''}>Otra</option></select></td>
+      <td style="padding:8px"><input class="targinp" type="number" value="${branchRoles[l].target}"
+        ${branchRoles[l].role!=='sale'?'disabled style="opacity:.4"':''} onchange="setRole('${l}','target',this.value)"></td>
+      <td style="padding:8px">${needMap?`<select onchange="setRole('${l}','mapTo',this.value)">${opts}</select>`:'<span style="color:var(--muted)">—</span>'}</td></tr>`;
+  });
+  html+='</table>';
+  document.getElementById('branch-roles').innerHTML=html;
+  document.getElementById('step-branches').style.display='block';
+  document.getElementById('step-params').style.display='block';
+  document.getElementById('run').disabled=false;
+}
+window.setRole=(loc,field,val)=>{branchRoles[loc][field]=field==='target'?(Number(val)||0):val;if(field==='role')onFilesChanged();};
+
+function resolveLoc(loc){const r=branchRoles[loc];return(r&&r.mapTo)?r.mapTo:loc;}
+
+function runEngine(){
+  const days=Number(document.getElementById('p-days').value)||30;
+  const cover=Number(document.getElementById('p-cover').value)||30;
+  const minSale=Number(document.getElementById('p-minsale').value)||1;
+  const growth=(Number(document.getElementById('p-growth').value)||0)/100;
+  const coverRatio=cover/days;
+  const warnings=[];
+
+  let DEPO=null;const CONTRA=new Set(),EXCL=new Set();
+  Object.entries(branchRoles).forEach(([l,r])=>{
+    if(r.role==='depo')DEPO=l;if(r.role==='contra')CONTRA.add(l);if(r.role==='excl')EXCL.add(l);});
+  if(!DEPO)warnings.push('No marcaste ninguna base como Depósito: la pestaña de reposición saldrá vacía.');
+
+  const saleBranches=new Set();
+  Object.entries(branchRoles).forEach(([l,r])=>{if(r.role==='sale')saleBranches.add(r.mapTo||l);});
+
+  // unmatched sale branches warning
+  Object.entries(branchRoles).forEach(([l,r])=>{
+    const inStock=DATA.stock.some(x=>x.loc===l);
+    if(r.role==='sale'&&!inStock&&!r.mapTo)warnings.push('La tienda "'+l+'" tiene venta pero no tiene stock propio ni está emparejada a una base. Sus ventas quedan sin stock asociado.');
+  });
+
+  const branchList=[...saleBranches];
+  if(infoCruce&&infoCruce.vacio) warnings.push('Uno de los reportes no trae la columna de color: el cruce entre stock y venta va a fallar. Revisá que la columna se llame "Color" o "Color descripción".');
+  else if(infoCruce) warnings.push('ATENCIÓN: los colores de stock y venta casi no coinciden (solo el '+infoCruce.pct+'%). Parece que un reporte usa un formato y el otro otro. Stock trae: "'+infoCruce.ejStock+'". Venta trae: "'+infoCruce.ejVenta+'". Los dos tienen que usar lo mismo (código o nombre) y con el mismo formato de celda.');
+  if(infoPuente) warnings.push('El reporte de stock traía los grupos con nombre largo (ej: "BERMUDA ALGODON") y el de venta con código ("BER ALG"). Se tradujeron automáticamente '+infoPuente.grupos+' grupos en '+infoPuente.filas+' filas'+(infoPuente.sinTrad.length?'. Sin equivalencia (no tuvieron venta): '+infoPuente.sinTrad.filter(Boolean).slice(0,6).join(', '):'')+'.');
+  if(!DATA.venta.length&&!DATA.verano.length&&!DATA.prev.length)
+    warnings.push('Estás trabajando SOLO CON STOCK: se calculan "Distribución por stock" (nivela desde depósito y entre sucursales) y "Calzado". La reposición y las rotaciones necesitan la venta del período; contra-temporada necesita la venta del verano.');
+  else if(!DATA.venta.length)
+    warnings.push('No subiste la venta del período: la reposición desde depósito y las rotaciones por venta no se calculan. Para repartir sin venta, activá "Distribución por stock" en el Paso 3.');
+  // cadena por sucursal resuelta (para prioridad de proveedor)
+  const cadenaOf={};
+  Object.entries(branchRoles).forEach(([l,r])=>{if(r.role!=='sale')return;
+    const rb=r.mapTo||l; if(!cadenaOf[rb]||cadenaOf[rb]==='otra') cadenaOf[rb]=r.cadena||'otra';});
+  const prioProv=N((document.getElementById('p-prio-prov')||{}).value||'');
+  const calzadoGrp=N((document.getElementById('p-calzado-grp')||{}).value||'ZAPA');
+  const sueltoMax=Number((document.getElementById('p-suelto')||{}).value)||1;
+  // factor de tamaño por sucursal: participacion en venta + stock (editable via branchRoles[x].factor)
+  const vByLoc={}, sByLoc={}; let vTot=0,sTot=0;
+  DATA.venta.forEach(r=>{const loc=resolveLoc(r.loc);if(!saleBranches.has(loc))return;
+    const q=Math.max(0,r.qty);vByLoc[loc]=(vByLoc[loc]||0)+q;vTot+=q;});
+  DATA.stock.forEach(r=>{if(!saleBranches.has(r.loc))return;sByLoc[r.loc]=(sByLoc[r.loc]||0)+r.qty;sTot+=r.qty;});
+  const autoFactor={};
+  branchList.forEach(b=>{
+    const wv=vTot?(vByLoc[b]||0)/vTot:0, ws=sTot?(sByLoc[b]||0)/sTot:0;
+    // si no hay venta actual cargada, el peso sale solo del stock
+    const w = vTot ? (wv+ws)/2 : ws;
+    autoFactor[b]=Math.max(0.1,w*branchList.length);
+  });
+  const factor={};
+  branchList.forEach(b=>{factor[b]=(branchRoles[b]&&branchRoles[b].factor!=null)?branchRoles[b].factor:Math.round(autoFactor[b]*100)/100;});
+
+  // OJO: NO normalizar los ceros a la izquierda. En Dragonfish '05011' y '5011' son
+  // articulos DISTINTOS (un sweater y una calza). El codigo se compara tal cual viene.
+  const keyOf=r=>r.art+'|'+r.color+'|'+r.talle;
+  const stockMap={},attrs={};
+  DATA.stock.forEach(r=>{if(EXCL.has(r.loc))return;const k=keyOf(r);(stockMap[k]||={});
+    stockMap[k][r.loc]=(stockMap[k][r.loc]||0)+r.qty;
+    if(!attrs[k])attrs[k]={art:r.art,desc:r.desc,fam:r.fam,grp:r.grp,prov:r.prov,color:r.color,talle:r.talle};});
+  const saleMap={};
+  DATA.venta.forEach(r=>{const loc=resolveLoc(r.loc);if(EXCL.has(loc)||CONTRA.has(loc)||loc===DEPO)return;
+    const k=keyOf(r);(saleMap[k]||={});saleMap[k][loc]=(saleMap[k][loc]||0)+r.qty;
+    if(!attrs[k])attrs[k]={art:r.art,desc:r.desc,fam:r.fam,grp:r.grp,prov:r.prov,color:r.color,talle:r.talle};});
+
+  const allKeys=new Set([...Object.keys(stockMap),...Object.keys(saleMap)]);
+  const stockKeys=new Set(Object.keys(stockMap)); // articulos que EXISTEN en stock actual
+
+  // ===================== LIBRO MAYOR COMPARTIDO =====================
+  // disp[k][loc] = unidades TODAVIA disponibles para mover. Cada prototipo descuenta lo que toma.
+  // Lo que una sucursal RECIBE queda congelado: no se le acredita como disponible, asi ningun
+  // prototipo posterior puede volver a moverlo. Una unidad se compromete UNA sola vez.
+  const disp={};
+  Object.entries(stockMap).forEach(([k,v])=>{disp[k]={...v};});
+  const avail=(k,loc)=>{const d=disp[k];return d?(d[loc]||0):0;};
+  const take=(k,loc,q)=>{if(!disp[k])disp[k]={};disp[k][loc]=(disp[k][loc]||0)-q;};
+
+  // que prototipos correr y en que orden (definido por el usuario en el Paso 3)
+  const PROTOS=['repo','tras','calzado','pstock','movil','contra'];
+  const protoCfg=PROTOS.map(p=>{
+    const chk=document.getElementById('px-'+p), ord=document.getElementById('po-'+p);
+    return {p, on: chk? !!chk.checked : true, orden: ord? (Number(ord.value)||99) : 99};
+  }).filter(x=>x.on).sort((a,b)=>a.orden-b.orden);
+  const activos=new Set(protoCfg.map(x=>x.p));
+  const ordenEjec=protoCfg.map(x=>x.p);
+
+  const repo=[],tras=[],dead=[];
+  const leftoverGlobal={}; // k -> {b:{need,sold,onHand}} remanente que depo no cubrio
+
+  // faltante de cada sucursal para un SKU (vende y no le alcanza)
+  const repMin1=(document.getElementById('p-min1')||{checked:true}).checked;
+  const calcNeed=k=>{
+    const sl=saleMap[k]||{}, need={};
+    saleBranches.forEach(b=>{
+      const sold=Math.max(0,sl[b]||0), onHand=avail(k,b);
+      let demand=Math.round(sold*coverRatio);
+      // REGLA: si el talle se vendio y la sucursal quedo en CERO, reponer al menos 1.
+      // Sin esto, un articulo que vende de a 1 par (tipico en calzado) nunca dispara
+      // reposicion cuando el periodo de venta es largo, porque la demanda redondea a 0.
+      if(repMin1 && sold>0 && onHand===0 && demand<1) demand=1;
+      const n=demand-onHand;
+      if(n>0&&sold>0) need[b]={need:n,sold,onHand,min1:(demand===1&&Math.round(sold*coverRatio)<1)};
+    });
+    return need;
+  };
+
+  // --- PROTOTIPO: reponer desde deposito (consume stock de DEPO) ---
+  const runRepo=()=>{
+    allKeys.forEach(k=>{
+      const depoStock=DEPO?avail(k,DEPO):0;
+      let depoAvail=depoStock;
+      const needMap=calcNeed(k);
+      const leftover={};
+      if(depoStock>0){
+        const provArt=((attrs[k]||{}).prov)||'';
+        const esPrio=prioProv&&provArt===prioProv;
+        const prioRank=b=>(esPrio&&cadenaOf[b]==='ripcurl')?1:0;
+        Object.entries(needMap)
+          .sort((a,b)=>(prioRank(b[0])-prioRank(a[0]))||(b[1].sold-a[1].sold))
+          .forEach(([b,n])=>{
+            let q=n.need;
+            if(depoAvail>0){const t=Math.min(q,depoAvail);
+              if(t>0){repo.push({k,dest:b,qty:t,sold:n.sold,onHand:n.onHand,
+                depo:depoStock,depoRestante:depoAvail-t,prio:prioRank(b)===1});
+                take(k,DEPO,t);   // sale del depo y queda congelado en destino
+                depoAvail-=t; q-=t;}}
+            if(q>0) leftover[b]={need:q,sold:n.sold,onHand:n.onHand};
+          });
+      } else {
+        Object.entries(needMap).forEach(([b,n])=>{leftover[b]={need:n.need,sold:n.sold,onHand:n.onHand};});
+      }
+      leftoverGlobal[k]=leftover;
+    });
+  };
+
+  // --- PROTOTIPO: rotar entre sucursales (cubre lo que depo no pudo) ---
+  const runTras=()=>{
+    allKeys.forEach(k=>{
+      if(!stockKeys.has(k))return;
+      const sl=saleMap[k]||{};
+      // si la reposicion no corrio, el faltante es el total
+      const leftover=activos.has('repo')&&leftoverGlobal[k]?leftoverGlobal[k]:calcNeed(k);
+      const receivers=Object.entries(leftover).map(([b,n])=>({b,need:n.need,sold:n.sold,onHand:n.onHand}));
+      if(!receivers.length)return;
+      const donors=[];
+      saleBranches.forEach(b=>{
+        const onHand=avail(k,b), sold=Math.max(0,sl[b]||0);
+        if(onHand>0){const keep=sold>0?sold:0; const excess=onHand-keep; if(excess>0)donors.push({b,excess,sold,onHand});}
+      });
+      if(!donors.length)return;
+      donors.sort((a,b)=>b.excess-a.excess);
+      receivers.sort((a,b)=>b.sold-a.sold);
+      let di=0;
+      receivers.forEach(rc=>{let rem=rc.need;
+        while(rem>0&&di<donors.length){const d=donors[di];
+          if(d.b===rc.b){di++;continue;}
+          const mv=Math.min(rem,d.excess);
+          if(mv>0){tras.push({k,from:d.b,to:rc.b,qty:mv,sold:rc.sold,onHand:rc.onHand,origenStock:d.onHand});
+            take(k,d.b,mv);
+            rem-=mv; d.excess-=mv;}
+          if(d.excess<=0||mv<=0)di++;}});
+    });
+  };
+
+  // --- STOCK PARADO: no mueve nada, solo informa (no consume del libro mayor) ---
+  const calcDead=()=>{
+    allKeys.forEach(k=>{
+      if(!stockKeys.has(k))return;
+      const st=stockMap[k]||{}, sl=saleMap[k]||{};
+      saleBranches.forEach(b=>{const onHand=st[b]||0,sold=sl[b]||0;if(onHand>0&&sold<=0)dead.push({k,loc:b,onHand});});
+    });
+  };
+
+  // BRECHA ESTACIONAL (con estimacion para sucursales sin año anterior)
+  const season=[];
+  if(DATA.prev&&DATA.prev.length){
+    const prevAgg={},curAgg={};
+    const prevByBranch={}; // loc -> total prev units (para detectar sin comparativa)
+    DATA.prev.forEach(r=>{const loc=resolveLoc(r.loc);if(EXCL.has(loc)||CONTRA.has(loc)||loc===DEPO)return;
+      const q=Math.max(0,r.qty);
+      const key=loc+'§'+r.fam+'§'+r.grp;prevAgg[key]=(prevAgg[key]||0)+q;
+      prevByBranch[loc]=(prevByBranch[loc]||0)+q;});
+    DATA.stock.forEach(r=>{if(EXCL.has(r.loc)||CONTRA.has(r.loc)||r.loc===DEPO)return;if(!saleBranches.has(r.loc))return;
+      const key=r.loc+'§'+r.fam+'§'+r.grp;curAgg[key]=(curAgg[key]||0)+r.qty;});
+
+    // sucursales con / sin comparativa
+    const withHist=[...saleBranches].filter(b=>(prevByBranch[b]||0)>0);
+    const noHist=[...saleBranches].filter(b=>(prevByBranch[b]||0)===0);
+    noHist.forEach(b=>warnings.push('La sucursal "'+b+'" no tiene venta del año anterior: su objetivo en la brecha estacional es estimado (promedio de las demás, ajustado por tamaño).'));
+
+    // venta año pasado por fam§grp sumando solo sucursales con historia, y suma de factores de esas sucursales
+    const prevByFG={}; // fam§grp -> total prev (solo withHist)
+    Object.entries(prevAgg).forEach(([key,v])=>{const[loc,fam,grp]=key.split('§');
+      if((prevByBranch[loc]||0)>0){const fg=fam+'§'+grp;prevByFG[fg]=(prevByFG[fg]||0)+v;}});
+    const sumFactorHist=withHist.reduce((a,b)=>a+(factor[b]||0),0)||1;
+
+    // filas para sucursales CON historia (dato real)
+    Object.entries(prevAgg).forEach(([key,prevSold])=>{const[loc,fam,grp]=key.split('§');
+      if((prevByBranch[loc]||0)===0)return; // las sin historia se generan aparte
+      const target=Math.round(prevSold*(1+growth)),cur=curAgg[key]||0;
+      season.push({loc,fam,grp,prevSold,target,cur,gap:target-cur,estimado:false});});
+
+    // filas ESTIMADAS para sucursales sin historia: por cada fam§grp que exista en las demas
+    noHist.forEach(b=>{
+      const fct=factor[b]||0.1;
+      Object.entries(prevByFG).forEach(([fg,totalPrev])=>{
+        const[fam,grp]=fg.split('§');
+        // estimado = (venta promedio por unidad-de-factor) * factor de esta sucursal
+        const estPrev=Math.round((totalPrev/sumFactorHist)*fct);
+        if(estPrev<=0)return;
+        const target=Math.round(estPrev*(1+growth));
+        const cur=curAgg[b+'§'+fam+'§'+grp]||0;
+        season.push({loc:b,fam,grp,prevSold:estPrev,target,cur,gap:target-cur,estimado:true});});
+    });
+  } else warnings.push('No subiste la venta del año anterior: la pestaña "Brecha estacional" estará vacía.');
+
+  // sanity: period days vs implied
+  if(days>=200)warnings.push('El período es de '+days+' días: recordá que la reposición proyecta la demanda a '+cover+' días de cobertura.');
+
+  // STOCK INMOVILIZADO: por key, locs con stock>0 y venta=0.
+  // Si el articulo tiene salida en otras -> repartir proporcional a venta. Si no -> lista "sin salida".
+  const movil=[], nosale=[];
+  const branchArr=[...saleBranches];
+  const runMovil=()=>{ allKeys.forEach(k=>{
+    const st=disp[k]||{}, sl=saleMap[k]||{};
+    const frozen=[]; const sellers=[];
+    let totalSold=0;
+    branchArr.forEach(b=>{
+      const onHand=st[b]||0, sold=Math.max(0,sl[b]||0);
+      if(onHand>0 && sold===0) frozen.push({b,onHand});
+      if(sold>0){ sellers.push({b,sold}); totalSold+=sold; }
+    });
+    if(!frozen.length) return;
+    if(totalSold===0){ frozen.forEach(f=>nosale.push({k,loc:f.b,onHand:f.onHand})); return; }
+    frozen.forEach(f=>{
+      const elig=sellers.filter(s=>s.b!==f.b);
+      const ssum=elig.reduce((a,b)=>a+b.sold,0);
+      if(ssum===0) return;
+      // reparto proporcional con mayor-resto
+      const raw=elig.map(s=>({b:s.b,sold:s.sold,x:f.onHand*s.sold/ssum}));
+      const base=raw.map(r=>({b:r.b,sold:r.sold,q:Math.floor(r.x),frac:r.x-Math.floor(r.x)}));
+      let rem=f.onHand-base.reduce((a,b)=>a+b.q,0);
+      base.sort((a,b)=>b.frac-a.frac);
+      for(let i=0;i<rem;i++) base[i%base.length].q++;
+      base.forEach(b=>{ if(b.q>0){ movil.push({k,from:f.b,to:b.b,qty:b.q,sold:b.sold});
+        take(k,f.b,b.q); } });
+    });
+  }); };
+
+  const enrich=row=>Object.assign({},attrs[row.k]||{},row);
+
+  // ============ ROTACION POR STOCK IDEAL (grupo+talle, ajustado por tamaño de sucursal) ============
+  const idealCover=Number((document.getElementById('p-ideal-cover')||{}).value)||60;
+  const cushion=1+((Number((document.getElementById('p-cushion')||{}).value)||20)/100);
+  const idealCovRatio=idealCover/days;
+
+  // grupos principales: top por venta (o los marcados manualmente en idealGroups)
+  const grpVenta={};
+  DATA.venta.forEach(r=>{const loc=resolveLoc(r.loc);if(!saleBranches.has(loc))return;
+    grpVenta[r.grp]=(grpVenta[r.grp]||0)+Math.max(0,r.qty);});
+  let mainGroups;
+  if(window.idealGroups && window.idealGroups.length) mainGroups=window.idealGroups.slice();
+  else mainGroups=Object.entries(grpVenta).sort((a,b)=>b[1]-a[1]).slice(0,12).map(x=>x[0]).filter(Boolean);
+  const mainSet=new Set(mainGroups);
+
+  // curva base ideal por grupo+talle = (venta media por sucursal) * cobertura ideal
+  // editable via window.idealCurve[grp][talle]
+  const vgt={}; // grp -> talle -> vendido total
+  DATA.venta.forEach(r=>{const loc=resolveLoc(r.loc);if(!saleBranches.has(loc))return;if(!mainSet.has(r.grp))return;
+    (vgt[r.grp]||={});const tl=r.talle||'—';vgt[r.grp][tl]=(vgt[r.grp][tl]||0)+Math.max(0,r.qty);});
+  const idealBase={}; // grp -> talle -> unidades ideales (factor 1.0)
+  Object.keys(vgt).forEach(g=>{idealBase[g]={};Object.keys(vgt[g]).forEach(t=>{
+    let v=(vgt[g][t]/branchList.length)*idealCovRatio;
+    if(window.idealCurve&&window.idealCurve[g]&&window.idealCurve[g][t]!=null) v=window.idealCurve[g][t];
+    idealBase[g][t]=v;});});
+
+  // stock actual por grupo+talle+loc (sumando articulos)
+  const sgt={}; // 'grp|talle|loc' -> qty
+  DATA.stock.forEach(r=>{if(!saleBranches.has(r.loc))return;if(!mainSet.has(r.grp))return;
+    const tl=r.talle||'—';const kk=r.grp+'|'+tl+'|'+r.loc;sgt[kk]=(sgt[kk]||0)+r.qty;});
+
+  const idealRot=[];
+  Object.keys(idealBase).forEach(g=>{
+    Object.keys(idealBase[g]).forEach(t=>{
+      const ib=idealBase[g][t]; if(ib<=0) return;
+      const donors=[], receivers=[];
+      branchList.forEach(b=>{
+        const ideal=ib*factor[b]; const cur=sgt[g+'|'+t+'|'+b]||0;
+        if(cur>ideal*cushion) donors.push({b,extra:cur-ideal,ideal,cur});
+        else if(cur<ideal) receivers.push({b,need:ideal-cur,ideal,cur});
+      });
+      if(!donors.length||!receivers.length) return;
+      donors.sort((a,b)=>b.extra-a.extra); receivers.sort((a,b)=>b.need-a.need);
+      let di=0;
+      receivers.forEach(rc=>{
+        let rem=rc.need;
+        while(rem>0.5 && di<donors.length){
+          const d=donors[di];
+          if(d.b===rc.b){ di++; continue; }
+          const mv=Math.floor(Math.min(rem,d.extra));
+          if(mv>0){ idealRot.push({grp:g,talle:t,from:d.b,to:rc.b,qty:mv,
+            destStock:Math.round(rc.cur),destIdeal:Math.round(rc.ideal),origStock:Math.round(d.cur),origIdeal:Math.round(d.ideal)});
+            rem-=mv; d.extra-=mv; }
+          if(d.extra<1 || mv===0) di++;   // avanzar SIEMPRE si no se pudo mover (evita loop infinito)
+        }
+      });
+    });
+  });
+  // guardar info para el panel de config
+  // ============ CALZADO: unir pares sueltos en la sucursal con mas pares del modelo ============
+  // modelo = articulo + color. Los talles con <= sueltoMax pares se mandan al "ancla"
+  // (la sucursal que ya tiene mas pares de ese modelo) para reconstruir la curva.
+  const calzado=[];
+  const runCalzado=()=>{
+  const modelStock={}; // 'art|color' -> loc -> total pares
+  const modelRows={};  // 'art|color' -> [{talle,loc,qty,k}]
+  DATA.stock.forEach(r=>{
+    if(!saleBranches.has(r.loc))return;
+    if(r.grp!==calzadoGrp)return;
+    const q=avail(keyOf(r),r.loc);   // lo que TODAVIA queda disponible
+    if(q<=0)return;
+    const mk=r.art+'|'+r.color;
+    (modelStock[mk]||={}); modelStock[mk][r.loc]=(modelStock[mk][r.loc]||0)+q;
+    (modelRows[mk]||=[]).push({talle:r.talle||'—',loc:r.loc,qty:q,k:keyOf(r),desc:r.desc,art:r.art,color:r.color});
+  });
+  Object.keys(modelStock).forEach(mk=>{
+    const byLoc=modelStock[mk];
+    const locsOrd=Object.entries(byLoc).sort((a,b)=>b[1]-a[1]);
+    if(locsOrd.length<2)return;                 // si esta en una sola sucursal, no hay nada que unir
+    const ancla=locsOrd[0][0], anclaPares=locsOrd[0][1];
+    // sueltos en OTRAS sucursales
+    modelRows[mk].forEach(row=>{
+      if(row.loc===ancla)return;
+      if(row.qty>sueltoMax)return;              // no es suelto
+      calzado.push({k:row.k,art:row.art,desc:row.desc,color:row.color,talle:row.talle,
+        from:row.loc,to:ancla,qty:row.qty,anclaPares,origPares:byLoc[row.loc],tipo:'Sucursal'});
+      take(row.k,row.loc,row.qty);
+    });
+  });
+
+  // --- FASE 2: completar curvas DESDE EL DEPOSITO ---
+  // Solo se mandan los talles que a la sucursal le FALTAN para tener la curva del modelo.
+  // Prioridad: las sucursales mas cerca de completar (menos talles faltantes) van primero.
+  if(DEPO){
+    const curvaDe={}, kDeTalle={}, tieneMod={}, infoMod={};
+    DATA.stock.forEach(r=>{
+      if(r.grp!==calzadoGrp)return;
+      const mk=r.art+'|'+r.color, tl=r.talle||'—';
+      (curvaDe[mk]||=new Set()).add(tl);
+      (kDeTalle[mk]||={})[tl]=keyOf(r);
+      if(!infoMod[mk])infoMod[mk]={art:r.art,desc:r.desc,color:r.color};
+      if(saleBranches.has(r.loc)&&r.qty>0){((tieneMod[mk]||={})[r.loc]||=new Set()).add(tl);}
+    });
+    // sumar lo que la fase 1 ya le mando a cada sucursal
+    calzado.forEach(c=>{const mk=c.art+'|'+c.color;((tieneMod[mk]||={})[c.to]||=new Set()).add(c.talle);});
+    Object.keys(curvaDe).forEach(mk=>{
+      const curva=[...curvaDe[mk]], porLoc=tieneMod[mk]||{};
+      const cands=Object.keys(porLoc).map(b=>({b,faltan:curva.filter(tl=>!porLoc[b].has(tl))}))
+        .filter(x=>x.faltan.length>0)
+        .sort((a,b)=>a.faltan.length-b.faltan.length);
+      cands.forEach(c=>{
+        c.faltan.forEach(tl=>{
+          const k=(kDeTalle[mk]||{})[tl]; if(!k)return;
+          if(avail(k,DEPO)>0){
+            const im=infoMod[mk];
+            calzado.push({k,art:im.art,desc:im.desc,color:im.color,talle:tl,
+              from:DEPO,to:c.b,qty:1,tipo:'Depósito',faltaban:c.faltan.length,teniaCurva:curva.length-c.faltan.length});
+            take(k,DEPO,1);
+          }
+        });
+      });
+    });
+  }
+  };
+
+  // ============ CONTRA-TEMPORADA: reparto por CURVAS COMPLETAS con tope POR TALLE ============
+  // 1) Por modelo (art+color) se arman curvas completas: 1 unidad de cada talle que haya en stock.
+  // 2) Cada curva completa va ENTERA a una sucursal. Tope duro: max N unidades del MISMO TALLE por sucursal.
+  // 3) Lo que sobra va a OTRA sucursal; pero si sobra UNA SOLA unidad, se anexa a la que se llevo la curva.
+  // Elegibles: solo las que vendieron ESE GRUPO en verano.
+  const contra=[], contraSobra=[];
+  const runContra=()=>{
+    if(!CONTRA.size)return;
+    const maxPorTalle=Number((document.getElementById('p-contra-max')||{}).value)||2;
+    const modoContra=((document.getElementById('p-contra-modo')||{}).value)||'parejo';
+    const veranoGrpLoc={};
+    const fuente=(DATA.verano&&DATA.verano.length)?DATA.verano:DATA.venta;
+    fuente.forEach(r=>{const loc=resolveLoc(r.loc);if(!saleBranches.has(loc))return;
+      const q=Math.max(0,r.qty); if(q<=0)return;
+      (veranoGrpLoc[r.grp]||={}); veranoGrpLoc[r.grp][loc]=(veranoGrpLoc[r.grp][loc]||0)+q;});
+
+    // agrupar el stock de contra-temporada por MODELO (art+color)
+    const modelos={};
+    DATA.stock.forEach(r=>{if(!CONTRA.has(r.loc))return;
+      const q=avail(keyOf(r),r.loc); if(q<=0)return;
+      const mk=r.art+'|'+r.color;
+      (modelos[mk]||={art:r.art,color:r.color,desc:r.desc,grp:r.grp,fam:r.fam,from:r.loc,porTalle:{},kDe:{}});
+      const tl=r.talle||'—';
+      modelos[mk].porTalle[tl]=(modelos[mk].porTalle[tl]||0)+q;
+      modelos[mk].kDe[tl]=keyOf(r);});
+
+    const ORD=['XS','S','M','L','XL','2XL','3XL','XXL','XXXL'];
+    const cmpTalle=(a,b)=>{const ia=ORD.indexOf(a),ib=ORD.indexOf(b);
+      if(ia>=0&&ib>=0)return ia-ib;if(ia>=0)return -1;if(ib>=0)return 1;
+      const na=parseFloat(a),nb=parseFloat(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a<b?-1:1;};
+
+    const acc={}; // 'k|to' -> fila
+    const push=(mo,tl,to,qty,sold,esCurva)=>{
+      const k=mo.kDe[tl], ak=k+'|'+to;
+      if(acc[ak]){acc[ak].qty+=qty; if(esCurva)acc[ak].curva=true;}
+      else acc[ak]={k,art:mo.art,desc:mo.desc,grp:mo.grp,color:mo.color,talle:tl,
+        from:mo.from,to,qty,ventaVerano:sold,curva:!!esCurva};
+      take(k,mo.from,qty);
+    };
+    const sobrar=(mo,tl,qty,motivo)=>{
+      const k=mo.kDe[tl];
+      const ex=contraSobra.find(x=>x.k===k&&x.motivo===motivo);
+      if(ex)ex.qty+=qty;
+      else contraSobra.push({k,art:mo.art,desc:mo.desc,grp:mo.grp,color:mo.color,talle:tl,
+        from:mo.from,qty,motivo});
+    };
+
+    Object.values(modelos).forEach(mo=>{
+      const shares=veranoGrpLoc[mo.grp]||{};
+      const elig=Object.entries(shares).filter(([b,v])=>v>0&&saleBranches.has(b)).map(([b,v])=>({b,sold:v}));
+      const talles=Object.keys(mo.porTalle).sort(cmpTalle);
+      if(!elig.length){
+        talles.forEach(tl=>sobrar(mo,tl,mo.porTalle[tl],'Ninguna sucursal vendió este grupo en verano'));
+        return;
+      }
+      // asignT[sucursal][talle] = unidades ya asignadas de ese talle. TOPE DURO = maxPorTalle
+      const asignT={}; elig.forEach(e=>{asignT[e.b]={};});
+      const nCurvas=Math.min(...talles.map(tl=>mo.porTalle[tl]));
+      const asignCurvas={}; elig.forEach(e=>{asignCurvas[e.b]=0;});
+      const recibieronCurva=[];
+      for(let i=0;i<nCurvas;i++){
+        // solo puede recibir la curva si NINGUN talle de la curva la pasaria del tope
+        const cand=elig.filter(e=>talles.every(tl=>(asignT[e.b][tl]||0)<maxPorTalle))
+          .sort((a,b)=> modoContra==='venta'
+            ? (b.sold-a.sold)||(asignCurvas[a.b]-asignCurvas[b.b])       // la que mas vendio se llena primero
+            : (asignCurvas[a.b]-asignCurvas[b.b])||(b.sold-a.sold));     // reparto parejo
+        if(!cand.length){
+          talles.forEach(tl=>sobrar(mo,tl,1,'Todas las sucursales llegaron al tope de '+maxPorTalle+' por talle'));
+          continue;
+        }
+        const pick=cand[0]; asignCurvas[pick.b]++;
+        if(!recibieronCurva.includes(pick.b)) recibieronCurva.push(pick.b);
+        talles.forEach(tl=>{asignT[pick.b][tl]=(asignT[pick.b][tl]||0)+1;
+          push(mo,tl,pick.b,1,pick.sold,true);});
+      }
+      // sobrantes por talle
+      const sobrantes=talles.map(tl=>({tl,q:mo.porTalle[tl]-nCurvas})).filter(x=>x.q>0);
+      const totalSob=sobrantes.reduce((a,b)=>a+b.q,0);
+      if(totalSob===0)return;
+      // si sobra UNA SOLA unidad -> se anexa a la sucursal que recibio la curva (si no la pasa del tope)
+      if(totalSob===1&&recibieronCurva.length){
+        const tl=sobrantes[0].tl;
+        const b=recibieronCurva.find(x=>(asignT[x][tl]||0)<maxPorTalle);
+        if(b){const e=elig.find(x=>x.b===b);
+          asignT[b][tl]=(asignT[b][tl]||0)+1;
+          push(mo,tl,b,1,e?e.sold:0,false);
+          return;}
+      }
+      // si sobra mas de una -> a OTRAS sucursales (primero las que no recibieron curva), respetando el tope
+      const asignSob={}; elig.forEach(e=>{asignSob[e.b]=0;});
+      sobrantes.forEach(s=>{
+        for(let u=0;u<s.q;u++){
+          const cand=elig.filter(e=>(asignT[e.b][s.tl]||0)<maxPorTalle)
+            .sort((a,b)=>{
+              if(modoContra==='venta') return (b.sold-a.sold)||(asignSob[a.b]-asignSob[b.b]);
+              const ca=asignCurvas[a.b]>0?1:0, cb=asignCurvas[b.b]>0?1:0;
+              return (ca-cb)||(asignSob[a.b]-asignSob[b.b])||(b.sold-a.sold);});
+          if(!cand.length){sobrar(mo,s.tl,1,'Todas las sucursales llegaron al tope de '+maxPorTalle+' por talle');continue;}
+          const pick=cand[0]; asignSob[pick.b]++;
+          asignT[pick.b][s.tl]=(asignT[pick.b][s.tl]||0)+1;
+          push(mo,s.tl,pick.b,1,pick.sold,false);
+        }
+      });
+    });
+    Object.values(acc).forEach(v=>contra.push(v));
+  };
+
+  // ============ DISTRIBUCION POR STOCK PURO (sin mirar venta) ============
+  // "Repetido" = mas de X unidades del mismo art+color+talle en una sucursal.
+  // Nivela: el excedente va a las que menos tienen, repartiendo parejo.
+  // Primero reparte el deposito, despues las sucursales entre si.
+  const distStock=[];
+  const runPstock=()=>{
+    const umbral=Number((document.getElementById('p-rep-umbral')||{}).value)||2;
+    allKeys.forEach(k=>{
+      if(!stockKeys.has(k))return;
+      const st=disp[k]||{};
+      const nivel={}; branchList.forEach(b=>{nivel[b]=st[b]||0;});
+      const faltaAlgo=branchList.some(b=>nivel[b]<umbral);
+      if(!faltaAlgo)return;
+      // elige la sucursal con MENOS unidades; desempata la de mayor factor de tamaño
+      const pick=()=>{
+        const c=branchList.filter(b=>nivel[b]<umbral);
+        if(!c.length)return null;
+        c.sort((a,b)=>(nivel[a]-nivel[b])||((factor[b]||0)-(factor[a]||0))||(a<b?-1:1));
+        return c[0];
+      };
+      // 1) desde deposito
+      let depoAvail=DEPO?avail(k,DEPO):0;
+      const depoIni=depoAvail;
+      const accD={};
+      while(depoAvail>0){
+        const b=pick(); if(!b)break;
+        nivel[b]++; depoAvail--; accD[b]=(accD[b]||0)+1;
+      }
+      Object.entries(accD).forEach(([b,q])=>{distStock.push({k,from:DEPO,to:b,qty:q,
+        tipo:'Depósito',stockOrigen:depoIni,restaOrigen:depoAvail,teniaDest:(st[b]||0)});
+        take(k,DEPO,q);});
+      // 2) entre sucursales: las que quedaron por encima del umbral donan el excedente
+      const donors=branchList.filter(b=>nivel[b]>umbral).map(b=>({b,ex:nivel[b]-umbral,ini:nivel[b]}));
+      donors.sort((a,b)=>b.ex-a.ex);
+      const accS={};
+      donors.forEach(d=>{
+        while(d.ex>0){
+          const b=pick(); if(!b)break;
+          nivel[b]++; nivel[d.b]--; d.ex--;
+          const kk=d.b+'>'+b; accS[kk]=(accS[kk]||0)+1;
+        }
+      });
+      Object.entries(accS).forEach(([kk,q])=>{const i=kk.indexOf('>');
+        const f=kk.slice(0,i),t=kk.slice(i+1);
+        distStock.push({k,from:f,to:t,qty:q,tipo:'Sucursal',stockOrigen:(st[f]||0),teniaDest:(st[t]||0)});
+        take(k,f,q);});
+    });
+  };
+
+  // ===================== EJECUCION EN EL ORDEN ELEGIDO =====================
+  const runners={repo:runRepo,tras:runTras,calzado:runCalzado,pstock:runPstock,movil:runMovil,contra:runContra};
+  ordenEjec.forEach(p=>{ if(runners[p]) runners[p](); });
+  calcDead();
+  if(!activos.size) warnings.push('No hay ningún prototipo activo: marcá al menos uno en el Paso 3.');
+  else {
+    const nom={repo:'Reponer desde depósito',tras:'Rotar entre sucursales',calzado:'Calzado: unir pares',
+      contra:'Contra-temporada',pstock:'Distribución por stock',movil:'Rotar inmovilizado'};
+    warnings.push('Prototipos ejecutados, en orden: '+ordenEjec.map(x=>nom[x]).join(' → ')+
+      '. El stock se descuenta en ese orden, así una unidad no se compromete dos veces. Las pestañas no marcadas quedan vacías.');
+  }
+
+  // resumen por modelo+destino (curva que se arma)
+  const calzadoCurva={};
+  calzado.forEach(c=>{const ck=c.art+'|'+c.color+'§'+c.to;
+    (calzadoCurva[ck]||={art:c.art,desc:c.desc,color:c.color,dest:c.to,talles:{},total:0,froms:new Set(),anclaPares:c.anclaPares});
+    const cc=calzadoCurva[ck];cc.talles[c.talle]=(cc.talles[c.talle]||0)+c.qty;cc.total+=c.qty;cc.froms.add(c.from);});
+  const calzadoResumen=Object.values(calzadoCurva).map(c=>({...c,froms:[...c.froms]})).sort((a,b)=>b.total-a.total);
+
+  // resumen curva contra-temporada por articulo+destino
+  const contraCurva={};
+  contra.forEach(c=>{const ck=c.art+'|'+c.color+'§'+c.to;
+    (contraCurva[ck]||={art:c.art,desc:c.desc,color:c.color,grp:c.grp,dest:c.to,talles:{},total:0});
+    const cc=contraCurva[ck];cc.talles[c.talle||'—']=(cc.talles[c.talle||'—']||0)+c.qty;cc.total+=c.qty;});
+  const contraResumen=Object.values(contraCurva).sort((a,b)=>b.total-a.total);
+
+
+  RESULT_CONFIG={factor,autoFactor,mainGroups,idealBase,branchList};
+
+  // CURVE view: group by art+dest from tras
+  const curveMap={};
+  tras.forEach(t=>{const a=attrs[t.k];const ck=a.art+'§'+t.to;
+    (curveMap[ck]||={art:a.art,desc:a.desc,dest:t.to,talles:{},total:0,froms:new Set()});
+    const cell=curveMap[ck];cell.talles[a.talle||'—']=(cell.talles[a.talle||'—']||0)+t.qty;
+    cell.total+=t.qty;cell.froms.add(t.from);});
+  const curve=Object.values(curveMap).map(c=>({...c,froms:[...c.froms]})).sort((a,b)=>b.total-a.total);
+
+  RESULT={repo:repo.map(enrich),tras:tras.map(enrich),dead:dead.map(enrich),
+    movil:movil.map(enrich),nosale:nosale.map(enrich),idealRot,
+    calzado,calzadoResumen,contra,contraResumen,contraSobra,distStock:distStock.map(enrich),
+    season:season.sort((a,b)=>b.gap-a.gap),curve,warnings,
+    meta:{days,cover,minSale,growth,DEPO,hasPrev:!!(DATA.prev&&DATA.prev.length),
+      hasVerano:!!(DATA.verano&&DATA.verano.length),calzadoGrp,prioProv}};
+  return RESULT;
+}
+
+document.getElementById('run').addEventListener('click',()=>{
+  const err=document.getElementById('calc-err');err.style.display='none';
+  try{runEngine();renderAll();
+    document.getElementById('results').style.display='block';
+    document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  }catch(e){err.textContent='Error en el cálculo: '+e.message;err.style.display='block';console.error(e);}
+});
+
+document.addEventListener('click',e=>{
+  if(e.target&&e.target.id==='recalc-ideal'){
+    try{runEngine();renderAll();
+      document.querySelectorAll('.tab[data-tab]').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      document.querySelector('.tab[data-tab="ideal"]').classList.add('active');
+      document.getElementById('panel-ideal').classList.add('active');
+    }catch(err){console.error(err);}
+  }
+});
+
+function renderAll(){
+  const r=RESULT;
+  const wb=document.getElementById('warnbox');
+  if(r.warnings.length){wb.innerHTML='<b>Avisos a revisar:</b><ul>'+r.warnings.map(w=>'<li>'+w+'</li>').join('')+'</ul>';wb.style.display='block';}
+  else wb.style.display='none';
+  const trasU=r.tras.reduce((a,b)=>a+b.qty,0),repoU=r.repo.reduce((a,b)=>a+b.qty,0),deadU=r.dead.reduce((a,b)=>a+b.onHand,0);
+  const movilU=r.movil.reduce((a,b)=>a+b.qty,0),nosaleU=r.nosale.reduce((a,b)=>a+b.onHand,0);
+  const idealU=r.idealRot.reduce((a,b)=>a+b.qty,0);
+  const calzU=r.calzado.reduce((a,b)=>a+b.qty,0);
+  const contraU=r.contra.reduce((a,b)=>a+b.qty,0);
+  document.getElementById('kpis').innerHTML=`
+    <div class="kpi repo"><div class="v">${repoU}</div><div class="l">unidades a reponer desde depó</div></div>
+    <div class="kpi tras"><div class="v">${r.tras.length}</div><div class="l">traslados (lo que depó no cubrió)</div></div>
+    <div class="kpi tras"><div class="v">${idealU}</div><div class="l">unidades por stock ideal</div></div>
+    <div class="kpi"><div class="v">${calzU}</div><div class="l">pares sueltos a unir</div></div>
+    <div class="kpi"><div class="v">${contraU}</div><div class="l">unidades contra-temporada</div></div>
+    <div class="kpi"><div class="v">${nosaleU}</div><div class="l">unidades sin salida</div></div>`;
+  buildTras();buildIdeal();buildConfigEditors();buildPstock();buildCalzado();buildContra();buildMovil();buildCurve();buildRepo();buildNosale();buildSeason();buildDead();
+  fillFilter('fl-tras-dest',[...new Set(r.tras.map(x=>x.to))].sort(),'Destino: ');
+  fillFilter('fl-repo-dest',[...new Set(r.repo.map(x=>x.dest))].sort());
+  fillFilter('fl-movil-dest',[...new Set(r.movil.map(x=>x.to))].sort(),'Destino: ');
+  fillFilter('fl-ideal-dest',[...new Set(r.idealRot.map(x=>x.to))].sort(),'Destino: ');
+  fillFilter('fl-calzado-dest',[...new Set(r.calzado.map(x=>x.to))].sort(),'Destino: ');
+  fillFilter('fl-pstock-dest',[...new Set(r.distStock.map(x=>x.to))].sort(),'Destino: ');
+  fillFilter('fl-contra-dest',[...new Set(r.contra.map(x=>x.to))].sort(),'Destino: ');
+  fillFilter('fl-nosale-grp',[...new Set(r.nosale.map(x=>x.grp))].filter(Boolean).sort());
+}
+function fillFilter(id,vals,prefix=''){
+  const sel=document.getElementById(id);
+  sel.innerHTML='<option value="">'+(prefix||'Todas las sucursales')+'</option>'+vals.map(v=>`<option value="${v}">${prefix}${v}</option>`).join('');
+}
+let sortState={};
+function sortable(tableId,rows,render){return(col,numeric)=>{
+  const st=sortState[tableId]||{};const dir=(st.col===col&&st.dir==='asc')?'desc':'asc';sortState[tableId]={col,dir};
+  rows.sort((a,b)=>{let x=a[col],y=b[col];if(numeric){x=Number(x)||0;y=Number(y)||0;}else{x=String(x||'');y=String(y||'');}
+    return(x<y?-1:x>y?1:0)*(dir==='asc'?1:-1);});render();};}
+function th(label,col,num){return `<th data-col="${col}" data-num="${num?1:0}">${label}</th>`;}
+
+function buildTras(){
+  const rows=RESULT.tras.slice(),t=document.getElementById('t-tras');
+  const render=()=>{
+    const q=N(document.getElementById('s-tras').value),fd=document.getElementById('fl-tras-dest').value;
+    const f=rows.filter(r=>{if(fd&&r.to!==fd)return false;if(!q)return true;
+      return(r.art+' '+r.desc+' '+r.grp+' '+r.fam+' '+r.from+' '+r.to+' '+r.color+' '+r.talle).toUpperCase().includes(q);});
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+      th('Sacar de','from')+th('Llevar a','to')+th('Vendió destino','sold',1)+th('Stock destino','onHand',1)+th('Mover','qty',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="10" class="empty">Sin resultados</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td><td>${r.color||''}</td><td>${r.talle||''}</td>
+      <td><span class="from">${r.from}</span></td><td><span class="to">${r.to}</span></td>
+      <td class="num-c">${r.sold}</td><td class="num-c">${r.onHand}</td><td class="num-c qty">${r.qty}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('tras',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-tras').oninput=render;document.getElementById('fl-tras-dest').onchange=render;render();
+}
+function buildMovil(){
+  const rows=RESULT.movil.slice(),t=document.getElementById('t-movil');
+  const render=()=>{
+    const q=N(document.getElementById('s-movil').value),fd=document.getElementById('fl-movil-dest').value;
+    const f=rows.filter(r=>{if(fd&&r.to!==fd)return false;if(!q)return true;
+      return(r.art+' '+r.desc+' '+r.grp+' '+r.fam+' '+r.from+' '+r.to+' '+r.color+' '+r.talle).toUpperCase().includes(q);});
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+      th('Sacar de (inmóvil)','from')+th('Llevar a','to')+th('Vendió destino','sold',1)+th('Mover','qty',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="9" class="empty">Sin inmovilizado con salida en otras sucursales</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td><td>${r.color||''}</td><td>${r.talle||''}</td>
+      <td><span class="from">${r.from}</span></td><td><span class="to">${r.to}</span></td>
+      <td class="num-c">${r.sold}</td><td class="num-c qty">${r.qty}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('movil',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-movil').oninput=render;document.getElementById('fl-movil-dest').onchange=render;render();
+}
+const TALLE_ORDER=['XS','S','M','L','XL','2XL','3XL','XXL','XXXL'];
+function sortTallesKeys(ts){return Object.keys(ts).sort((a,b)=>{
+  const ia=TALLE_ORDER.indexOf(a),ib=TALLE_ORDER.indexOf(b);
+  if(ia>=0&&ib>=0)return ia-ib;if(ia>=0)return -1;if(ib>=0)return 1;
+  const na=parseFloat(a),nb=parseFloat(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a<b?-1:1;});}
+
+let calzadoView='res', contraView='res';
+// ---------- HISTORIAL ----------
+function totalesDelPlan(){
+  const r=RESULT, sum=a=>(a||[]).reduce((x,y)=>x+y.qty,0);
+  const porSuc={}, porGrp={};
+  const acum=(arr,dk)=>{(arr||[]).forEach(x=>{const d=x[dk];if(d)porSuc[d]=(porSuc[d]||0)+x.qty;
+    if(x.grp)porGrp[x.grp]=(porGrp[x.grp]||0)+x.qty;});};
+  acum(r.repo,'dest'); acum(r.tras,'to'); acum(r.calzado,'to'); acum(r.contra,'to');
+  acum(r.distStock,'to'); acum(r.movil,'to');
+  return {
+    prototipo:{reponer:sum(r.repo),rotar:sum(r.tras),calzado:sum(r.calzado),
+      contra:sum(r.contra),porStock:sum(r.distStock),inmovilizado:sum(r.movil)},
+    sinRepartir:(r.contraSobra||[]).reduce((a,b)=>a+b.qty,0),
+    porSucursal:porSuc, porGrupo:porGrp,
+    lineas:(r.repo.length+r.tras.length+r.calzado.length+r.contra.length+r.distStock.length+r.movil.length)
+  };
+}
+function paramsDelPlan(){
+  const g=id=>{const e=document.getElementById(id);return e?(e.type==='checkbox'?e.checked:e.value):null;};
+  return {dias:g('p-days'),cobertura:g('p-cover'),ventaMin:g('p-minsale'),metaAnioAnt:g('p-growth'),
+    idealCobertura:g('p-ideal-cover'),colchon:g('p-cushion'),provPrioritario:g('p-prio-prov'),
+    grupoCalzado:g('p-calzado-grp'),parSuelto:g('p-suelto'),contraMaxTalle:g('p-contra-max'),
+    contraCriterio:g('p-contra-modo'),repetidoUmbral:g('p-rep-umbral'),reponerMin1:g('p-min1'),
+    archivos:{stock:files.stock,venta:files.venta,anioAnterior:files.prev,verano:files.verano}};
+}
+function protosDelPlan(){
+  const l=[];['repo','tras','calzado','contra','pstock','movil'].forEach(p=>{
+    const c=document.getElementById('px-'+p), o=document.getElementById('po-'+p);
+    if(c&&c.checked)l.push({p,orden:Number(o?o.value:99)});});
+  return l.sort((a,b)=>a.orden-b.orden).map(x=>x.p);
+}
+let HIST=[];
+async function guardarPlan(){
+  const est=document.getElementById('h-estado');
+  if(!RESULT){est.textContent='Primero calculá un plan.';return;}
+  const u=(document.getElementById('h-usuario').value||'').trim();
+  if(!u){est.textContent='Poné tu nombre para saber quién lo generó.';return;}
+  est.textContent='Guardando…';
+  try{
+    await supaGuardar({usuario:u,nota:(document.getElementById('h-nota').value||'').trim(),
+      parametros:paramsDelPlan(),prototipos:protosDelPlan(),totales:totalesDelPlan()});
+    est.textContent='✓ Guardado. Lo ves en la pestaña Historial.';
+    await cargarHistorial();
+  }catch(e){est.textContent='No se pudo guardar: '+e.message;}
+}
+async function cargarHistorial(){
+  const msg=document.getElementById('hist-msg');
+  msg.textContent='Cargando…';
+  try{ HIST=await supaListar(); msg.textContent=HIST.length?HIST.length+' planes guardados.':'Todavía no hay planes guardados.'; buildHist(); }
+  catch(e){ msg.textContent='No se pudo leer el historial: '+e.message; }
+}
+let histSel=[];
+function buildHist(){
+  const t=document.getElementById('t-hist');
+  let h='<tr><th></th>'+th('Fecha','fecha')+th('Quién','usuario')+th('Nota','nota')+
+    '<th>Prototipos</th>'+th('Unidades','u',1)+th('Líneas','l',1)+'<th></th></tr>';
+  if(!HIST.length)h+='<tr><td colspan="7" class="empty">Sin planes guardados. Calculá uno y tocá "Guardar".</td></tr>';
+  HIST.forEach(p=>{
+    const tt=p.totales||{}, pr=tt.prototipo||{};
+    const u=Object.values(pr).reduce((a,b)=>a+(b||0),0);
+    const f=new Date(p.fecha).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    h+=`<tr><td><input type="checkbox" onchange="selHist(${p.id},this.checked)" ${histSel.includes(p.id)?'checked':''}></td>
+      <td>${f}</td><td><b>${p.usuario||''}</b></td><td style="font-size:12px">${p.nota||''}</td>
+      <td style="font-size:11px;color:var(--muted)">${(p.prototipos||[]).join(', ')}</td>
+      <td class="num-c qty">${u}</td><td class="num-c">${tt.lineas||0}</td>
+      <td><button class="sec" style="padding:3px 8px;font-size:11px" onclick="borrarPlan(${p.id})">borrar</button></td></tr>`;});
+  t.innerHTML=h;
+  compararHist();
+}
+window.selHist=(id,on)=>{
+  if(on){histSel.push(id); if(histSel.length>2)histSel.shift();}
+  else histSel=histSel.filter(x=>x!==id);
+  buildHist();
+};
+window.borrarPlan=async id=>{
+  if(!confirm('¿Borrar este plan del historial? Lo van a dejar de ver todos.'))return;
+  try{ await supaBorrar(id); histSel=histSel.filter(x=>x!==id); await cargarHistorial(); }
+  catch(e){ document.getElementById('hist-msg').textContent='No se pudo borrar: '+e.message; }
+};
+function compararHist(){
+  const c=document.getElementById('hist-comp');
+  if(histSel.length!==2){c.innerHTML='<div style="font-size:12px;color:var(--muted)">Marcá dos planes para compararlos.</div>';return;}
+  const A=HIST.find(x=>x.id===histSel[0]), B=HIST.find(x=>x.id===histSel[1]);
+  if(!A||!B){c.innerHTML='';return;}
+  const fA=new Date(A.fecha).toLocaleDateString('es-AR'), fB=new Date(B.fecha).toLocaleDateString('es-AR');
+  const bloque=(titulo,oA,oB)=>{
+    const ks=[...new Set([...Object.keys(oA||{}),...Object.keys(oB||{})])].sort();
+    if(!ks.length)return '';
+    let x='<div style="margin-bottom:14px"><div style="font-weight:600;font-size:13px;margin-bottom:6px">'+titulo+'</div>';
+    x+='<table class="data"><tr><th></th><th>'+fA+' ('+(A.usuario||'')+')</th><th>'+fB+' ('+(B.usuario||'')+')</th><th>Diferencia</th></tr>';
+    ks.forEach(k=>{const a=(oA||{})[k]||0,b=(oB||{})[k]||0,d=b-a;
+      x+='<tr><td>'+k+'</td><td class="num-c">'+a+'</td><td class="num-c">'+b+'</td>'+
+        '<td class="num-c" style="color:'+(d>0?'var(--ok)':d<0?'var(--bad)':'var(--muted)')+'"><b>'+(d>0?'+':'')+d+'</b></td></tr>';});
+    return x+'</table></div>';
+  };
+  c.innerHTML='<div style="background:#f3f6f3;border:1px solid var(--line);border-radius:8px;padding:14px">'+
+    '<div style="font-weight:600;margin-bottom:10px">Comparación de planes</div>'+
+    bloque('Por prototipo',(A.totales||{}).prototipo,(B.totales||{}).prototipo)+
+    bloque('Por sucursal',(A.totales||{}).porSucursal,(B.totales||{}).porSucursal)+
+    bloque('Por grupo',(A.totales||{}).porGrupo,(B.totales||{}).porGrupo)+'</div>';
+}
+function buildPstock(){
+  const rows=RESULT.distStock.slice(),t=document.getElementById('t-pstock');
+  const render=()=>{
+    const q=N(document.getElementById('s-pstock').value);
+    const ft=document.getElementById('fl-pstock-tipo').value;
+    const fd=document.getElementById('fl-pstock-dest').value;
+    const f=rows.filter(r=>{
+      if(ft&&r.tipo!==ft)return false;
+      if(fd&&r.to!==fd)return false;
+      if(!q)return true;
+      return(r.art+' '+r.desc+' '+r.grp+' '+r.color+' '+r.talle+' '+r.from+' '+r.to).toUpperCase().includes(q);});
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+      th('Sacar de','from')+th('Origen','tipo')+th('Llevar a','to')+th('Tenía origen','stockOrigen',1)+th('Tenía destino','teniaDest',1)+th('Mover','qty',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="11" class="empty">Sin movimientos por stock. Revisá el tope en el Paso 3.</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td>
+      <td>${r.color||''}</td><td>${r.talle||''}</td><td><span class="from">${r.from}</span></td>
+      <td><span class="pill" style="${r.tipo==='Depósito'?'background:#e4eef9;color:#23527c':'background:#f4ecdc;color:#7a5a17'}">${r.tipo}</span></td>
+      <td><span class="to">${r.to}</span></td><td class="num-c" style="color:var(--muted)">${r.stockOrigen}</td>
+      <td class="num-c" style="color:var(--muted)">${r.teniaDest}</td><td class="num-c qty">${r.qty}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('pstock',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-pstock').oninput=render;
+  document.getElementById('fl-pstock-tipo').onchange=render;
+  document.getElementById('fl-pstock-dest').onchange=render;
+  render();
+}
+function buildCalzado(){
+  const t=document.getElementById('t-calzado');
+  const det=RESULT.calzado.slice(), res=RESULT.calzadoResumen.slice();
+  const render=()=>{
+    const q=N(document.getElementById('s-calzado').value),fd=document.getElementById('fl-calzado-dest').value;
+    let h='';
+    if(calzadoView==='res'){
+      const f=res.filter(r=>{if(fd&&r.dest!==fd)return false;if(!q)return true;
+        return(r.art+' '+r.desc+' '+r.color+' '+r.dest).toUpperCase().includes(q);});
+      h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Color','color')+th('Juntar en','dest')+
+        '<th>Talles que se suman</th>'+th('Pares a mover','total',1)+'<th>Vienen de</th>'+th('Ya tenía','anclaPares',1)+'</tr>';
+      if(!f.length)h+='<tr><td colspan="8" class="empty">Sin pares sueltos para unir. Revisá el grupo de calzado en el Paso 3.</td></tr>';
+      f.forEach(r=>{const cells=sortTallesKeys(r.talles).map(tl=>`<span class="curve-cell curve-has">${tl}: ${r.talles[tl]}</span>`).join('');
+        h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td>${r.color||''}</td>
+        <td><span class="to">${r.dest}</span></td><td>${cells}</td><td class="num-c qty">${r.total}</td>
+        <td style="font-size:12px;color:var(--muted)">${r.froms.join(', ')}</td><td class="num-c">${r.anclaPares}</td></tr>`;});
+    } else {
+      const ft=(document.getElementById('fl-calzado-tipo')||{}).value||'';
+      const f=det.filter(r=>{if(fd&&r.to!==fd)return false;if(ft&&r.tipo!==ft)return false;if(!q)return true;
+        return(r.art+' '+r.desc+' '+r.color+' '+r.from+' '+r.to+' '+r.talle).toUpperCase().includes(q);});
+      h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Color','color')+th('Talle','talle')+
+        th('Sacar de','from')+th('Origen','tipo')+th('Llevar a','to')+th('Pares','qty',1)+'</tr>';
+      if(!f.length)h+='<tr><td colspan="8" class="empty">Sin resultados</td></tr>';
+      f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td>${r.color||''}</td><td><b>${r.talle}</b></td>
+        <td><span class="from">${r.from}</span></td>
+        <td><span class="pill" style="${r.tipo==='Depósito'?'background:#e4eef9;color:#23527c':'background:#f4ecdc;color:#7a5a17'}">${r.tipo||''}</span></td>
+        <td><span class="to">${r.to}</span></td><td class="num-c qty">${r.qty}</td></tr>`;});
+    }
+    t.innerHTML=h;};
+  const doSort=sortable('calzado',calzadoView==='res'?res:det,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-calzado').oninput=render;document.getElementById('fl-calzado-dest').onchange=render;
+  const ftc=document.getElementById('fl-calzado-tipo'); if(ftc)ftc.onchange=render;
+  document.querySelectorAll('[data-sub^="calzado"]').forEach(tb=>{tb.onclick=()=>{
+    document.querySelectorAll('[data-sub^="calzado"]').forEach(x=>x.classList.remove('active'));
+    tb.classList.add('active');calzadoView=tb.dataset.sub==='calzado-res'?'res':'det';render();};});
+  render();
+}
+function buildContra(){
+  const t=document.getElementById('t-contra');
+  const det=RESULT.contra.slice(), res=RESULT.contraResumen.slice(), sob=RESULT.contraSobra.slice();
+  const render=()=>{
+    const q=N(document.getElementById('s-contra').value),fd=document.getElementById('fl-contra-dest').value;
+    let h='';
+    if(!RESULT.meta.hasVerano&&(det.length||sob.length)){
+      h+='<tr><td colspan="9" style="background:#fbf3e0;color:#7a5a17;font-size:12px;padding:8px">Sin reporte de venta del verano: se está usando la venta actual como referencia. Subilo en el Paso 1 para un reparto más fiel.</td></tr>';
+    }
+    if(contraView==='res'){
+      const f=res.filter(r=>{if(fd&&r.dest!==fd)return false;if(!q)return true;
+        return(r.art+' '+r.desc+' '+r.color+' '+r.grp+' '+r.dest).toUpperCase().includes(q);});
+      h+='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+
+        th('Enviar a','dest')+'<th>Talles</th>'+th('Total','total',1)+'</tr>';
+      if(!f.length)h+='<tr><td colspan="7" class="empty">Sin mercadería de contra-temporada para repartir. Marcá una base como "Contra-temporada" en el Paso 2.</td></tr>';
+      f.forEach(r=>{const cells=sortTallesKeys(r.talles).map(tl=>`<span class="curve-cell curve-has">${tl}: ${r.talles[tl]}</span>`).join('');
+        h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td><td>${r.color||''}</td>
+        <td><span class="to">${r.dest}</span></td><td>${cells}</td><td class="num-c qty">${r.total}</td></tr>`;});
+    } else if(contraView==='det'){
+      const f=det.filter(r=>{if(fd&&r.to!==fd)return false;if(!q)return true;
+        return(r.art+' '+r.desc+' '+r.grp+' '+r.color+' '+r.to+' '+r.talle).toUpperCase().includes(q);});
+      h+='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+        th('Sacar de','from')+th('Enviar a','to')+th('Vendió verano','ventaVerano',1)+th('Enviar','qty',1)+'</tr>';
+      if(!f.length)h+='<tr><td colspan="9" class="empty">Sin resultados</td></tr>';
+      f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td>
+        <td>${r.color||''}</td><td>${r.talle||''}</td><td><span class="from">${r.from}</span></td>
+        <td><span class="to">${r.to}</span></td><td class="num-c">${r.ventaVerano}</td><td class="num-c qty">${r.qty}</td></tr>`;});
+    } else {
+      const f=sob.filter(r=>{if(!q)return true;
+        return(r.art+' '+r.desc+' '+r.grp+' '+r.color+' '+r.talle).toUpperCase().includes(q);});
+      h+='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+        th('Queda en','from')+th('Unidades','qty',1)+'<th>Motivo</th></tr>';
+      if(!f.length)h+='<tr><td colspan="8" class="empty">Se reparte todo: no queda nada sin distribuir.</td></tr>';
+      f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td>
+        <td>${r.color||''}</td><td>${r.talle||''}</td><td><span class="pill">${r.from}</span></td>
+        <td class="num-c qty">${r.qty}</td><td style="font-size:12px;color:var(--muted)">${r.motivo}</td></tr>`;});
+    }
+    t.innerHTML=h;};
+  const doSort=sortable('contra',contraView==='res'?res:(contraView==='det'?det:sob),render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-contra').oninput=render;document.getElementById('fl-contra-dest').onchange=render;
+  document.querySelectorAll('[data-sub^="contra"]').forEach(tb=>{tb.onclick=()=>{
+    document.querySelectorAll('[data-sub^="contra"]').forEach(x=>x.classList.remove('active'));
+    tb.classList.add('active');
+    contraView=tb.dataset.sub==='contra-res'?'res':(tb.dataset.sub==='contra-det'?'det':'sob');render();};});
+  render();
+}
+function buildIdeal(){
+  const rows=RESULT.idealRot.slice(),t=document.getElementById('t-ideal');
+  const render=()=>{
+    const q=N(document.getElementById('s-ideal').value),fd=document.getElementById('fl-ideal-dest').value;
+    const f=rows.filter(r=>{if(fd&&r.to!==fd)return false;if(!q)return true;
+      return(r.grp+' '+r.talle+' '+r.from+' '+r.to).toUpperCase().includes(q);});
+    let h='<tr>'+th('Grupo','grp')+th('Talle','talle')+th('Sacar de','from')+th('Llevar a','to')+
+      th('Stock orig','origStock',1)+th('Ideal orig','origIdeal',1)+th('Stock dest','destStock',1)+th('Ideal dest','destIdeal',1)+th('Mover','qty',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="9" class="empty">Sin movimientos. Si recién cargaste, ajustá la config y tocá "Recalcular". Si no aparece nada, el stock ya está equilibrado contra el ideal.</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><span class="pill">${r.grp}</span></td><td><b>${r.talle}</b></td>
+      <td><span class="from">${r.from}</span></td><td><span class="to">${r.to}</span></td>
+      <td class="num-c">${r.origStock}</td><td class="num-c" style="color:var(--muted)">${r.origIdeal}</td>
+      <td class="num-c">${r.destStock}</td><td class="num-c" style="color:var(--muted)">${r.destIdeal}</td>
+      <td class="num-c qty">${r.qty}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('ideal',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-ideal').oninput=render;document.getElementById('fl-ideal-dest').onchange=render;render();
+}
+function buildConfigEditors(){
+  if(!RESULT_CONFIG)return;
+  const cfg=RESULT_CONFIG;
+  const fe=document.getElementById('factor-editor');
+  fe.innerHTML=cfg.branchList.map(b=>`<div class="bchip">${b}<br><input class="targinp" type="number" step="0.05" value="${cfg.factor[b]}"
+    onchange="setFactor('${b}',this.value)"> <span style="color:var(--muted);font-size:10px">auto: ${cfg.autoFactor[b].toFixed(2)}</span></div>`).join('');
+  const order=['XS','S','M','L','XL','2XL','3XL','XXL','XXXL'];
+  const sortTalles=ts=>Object.keys(ts).sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);
+    if(ia>=0&&ib>=0)return ia-ib;if(ia>=0)return -1;if(ib>=0)return 1;
+    const na=parseFloat(a),nb=parseFloat(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a<b?-1:1;});
+  const ce=document.getElementById('curve-editor');
+  let html='';
+  cfg.mainGroups.forEach(g=>{
+    if(!cfg.idealBase[g])return;
+    const talles=sortTalles(cfg.idealBase[g]);
+    html+=`<div style="margin-bottom:8px"><span class="pill" style="background:var(--moss);color:#fff">${g}</span> `;
+    talles.forEach(tl=>{const v=Math.round(cfg.idealBase[g][tl]*10)/10;
+      html+=`<span style="display:inline-block;margin:2px"><span style="font-size:11px;color:var(--muted)">${tl}</span>
+        <input class="targinp" style="width:48px" type="number" step="0.5" value="${v}" onchange="setCurve('${g}','${tl}',this.value)"></span>`;});
+    html+='</div>';});
+  ce.innerHTML=html;
+}
+window.setFactor=(b,v)=>{if(!branchRoles[b])branchRoles[b]={};branchRoles[b].factor=Number(v)||0.1;};
+window.idealCurve=window.idealCurve||{};
+window.setCurve=(g,t,v)=>{(window.idealCurve[g]||={});window.idealCurve[g][t]=Number(v)||0;};
+function buildNosale(){
+  const rows=RESULT.nosale.slice(),t=document.getElementById('t-nosale');
+  const render=()=>{
+    const q=N(document.getElementById('s-nosale').value),fg=document.getElementById('fl-nosale-grp').value;
+    const f=rows.filter(r=>{if(fg&&r.grp!==fg)return false;if(!q)return true;
+      return(r.art+' '+r.desc+' '+r.grp+' '+r.fam+' '+r.loc+' '+r.color+' '+r.talle).toUpperCase().includes(q);});
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+      th('Sucursal','loc')+th('Stock inmóvil','onHand',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="7" class="empty">Sin resultados</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td><td>${r.color||''}</td><td>${r.talle||''}</td>
+      <td><span class="pill">${r.loc}</span></td><td class="num-c qty">${r.onHand}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('nosale',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-nosale').oninput=render;document.getElementById('fl-nosale-grp').onchange=render;render();
+}
+function buildCurve(){
+  const rows=RESULT.curve.slice(),t=document.getElementById('t-curve');
+  const order=['XS','S','M','L','XL','2XL','3XL','XXL','XXXL'];
+  const sortTalles=ts=>Object.keys(ts).sort((a,b)=>{
+    const ia=order.indexOf(a),ib=order.indexOf(b);
+    if(ia>=0&&ib>=0)return ia-ib;if(ia>=0)return -1;if(ib>=0)return 1;
+    const na=parseFloat(a),nb=parseFloat(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a<b?-1:1;});
+  const render=()=>{
+    const q=N(document.getElementById('s-curve').value);
+    const f=rows.filter(r=>!q||(r.art+' '+r.desc).toUpperCase().includes(q));
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Sucursal destino','dest')+
+      '<th>Curva que se completa</th>'+th('Total','total',1)+'<th>Origen(es)</th></tr>';
+    if(!f.length)h+='<tr><td colspan="6" class="empty">Sin curvas para completar</td></tr>';
+    f.forEach(r=>{
+      const talles=sortTalles(r.talles);
+      const cells=talles.map(tl=>`<span class="curve-cell curve-has">${tl}: ${r.talles[tl]}</span>`).join('');
+      h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="to">${r.dest}</span></td>
+        <td>${cells}</td><td class="num-c qty">${r.total}</td><td style="font-size:12px;color:var(--muted)">${r.froms.join(', ')}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('curve',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-curve').oninput=render;render();
+}
+function buildRepo(){
+  const rows=RESULT.repo.slice(),t=document.getElementById('t-repo');
+  const render=()=>{
+    const q=N(document.getElementById('s-repo').value),fd=document.getElementById('fl-repo-dest').value;
+    const f=rows.filter(r=>{if(fd&&r.dest!==fd)return false;if(!q)return true;
+      return(r.art+' '+r.desc+' '+r.grp+' '+r.fam+' '+r.dest+' '+r.color+' '+r.talle).toUpperCase().includes(q);});
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+
+      th('Sucursal','dest')+th('Vendió','sold',1)+th('Stock actual','onHand',1)+th('Había en depó','depo',1)+th('Reponer','qty',1)+th('Queda en depó','depoRestante',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="11" class="empty">Sin resultados</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><b>${r.art}</b>${r.prio?' <span class="pill" style="background:#e5f1ea;color:#2f6b4f" title="Prioridad: proveedor '+RESULT.meta.prioProv+' a local Rip Curl">prio</span>':''}</td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td><td>${r.color||''}</td><td>${r.talle||''}</td>
+      <td><span class="pill">${r.dest}</span></td><td class="num-c">${r.sold}</td><td class="num-c">${r.onHand}</td>
+      <td class="num-c" style="color:var(--muted)">${r.depo}</td><td class="num-c qty">${r.qty}</td><td class="num-c">${r.depoRestante}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('repo',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-repo').oninput=render;document.getElementById('fl-repo-dest').onchange=render;render();
+}
+function buildSeason(){
+  const t=document.getElementById('t-season');
+  if(!RESULT.meta.hasPrev){t.innerHTML='<tr><td class="empty">Subí el reporte de <b>venta del año anterior</b> para ver la brecha estacional por familia/grupo.</td></tr>';return;}
+  const rows=RESULT.season.slice();
+  const render=()=>{
+    const q=N(document.getElementById('s-season').value);
+    const f=rows.filter(r=>!q||(r.loc+' '+r.fam+' '+r.grp).toUpperCase().includes(q));
+    const hayEst=rows.some(r=>r.estimado);
+    let h='<tr>'+th('Sucursal','loc')+th('Familia','fam')+th('Grupo','grp')+th('Vendió año pasado','prevSold',1)+
+      th('Objetivo (+'+Math.round(RESULT.meta.growth*100)+'%)','target',1)+th('Stock actual','cur',1)+th('Brecha','gap',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="7" class="empty">Sin resultados</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><span class="pill">${r.loc}</span>${r.estimado?' <span class="pill" style="background:#f4ecdc;color:#7a5a17" title="Estimado: esta sucursal no tiene venta del año anterior">est.</span>':''}</td><td>${r.fam}</td><td>${r.grp}</td>
+      <td class="num-c">${r.prevSold}${r.estimado?'*':''}</td><td class="num-c">${r.target}${r.estimado?'*':''}</td><td class="num-c">${r.cur}</td>
+      <td class="num-c ${r.gap>0?'qty':''}">${r.gap>0?'+':''}${r.gap}</td></tr>`;});
+    if(hayEst)h+='<tr><td colspan="7" style="font-size:11px;color:var(--muted);padding:8px">* Valores estimados: la sucursal no tiene venta del año anterior, se calcula con el promedio de las demás ajustado por su factor de tamaño.</td></tr>';
+    t.innerHTML=h;};
+  const doSort=sortable('season',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-season').oninput=render;render();
+}
+function buildDead(){
+  const rows=RESULT.dead.slice(),t=document.getElementById('t-dead');
+  const render=()=>{
+    const q=N(document.getElementById('s-dead').value);
+    const f=rows.filter(r=>!q||(r.art+' '+r.desc+' '+r.grp+' '+r.fam+' '+r.loc+' '+r.color+' '+r.talle).toUpperCase().includes(q));
+    let h='<tr>'+th('Artículo','art')+th('Descripción','desc')+th('Grupo','grp')+th('Color','color')+th('Talle','talle')+th('Sucursal','loc')+th('Stock parado','onHand',1)+'</tr>';
+    if(!f.length)h+='<tr><td colspan="7" class="empty">Sin stock parado</td></tr>';
+    f.forEach(r=>{h+=`<tr><td><b>${r.art}</b></td><td>${r.desc||''}</td><td><span class="pill">${r.grp||''}</span></td><td>${r.color||''}</td><td>${r.talle||''}</td>
+      <td><span class="pill">${r.loc}</span></td><td class="num-c qty">${r.onHand}</td></tr>`;});
+    t.innerHTML=h;};
+  const doSort=sortable('dead',rows,render);
+  t.onclick=e=>{const th=e.target.closest('th[data-col]');if(th)doSort(th.dataset.col,th.dataset.num==='1');};
+  document.getElementById('s-dead').oninput=render;render();
+}
+
+document.querySelectorAll('.tab[data-tab]').forEach(tab=>{tab.onclick=()=>{
+  document.querySelectorAll('.tab[data-tab]').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  tab.classList.add('active');document.getElementById('panel-'+tab.dataset.tab).classList.add('active');};});
+
+document.addEventListener('click',e=>{
+  if(e.target&&e.target.id==='h-guardar')guardarPlan();
+  if(e.target&&e.target.id==='hist-refresh')cargarHistorial();
+});
+// al entrar a la pestaña Historial, traer la lista
+document.querySelectorAll('.tab[data-tab="hist"]').forEach(t=>{
+  t.addEventListener('click',()=>{ if(!HIST.length)cargarHistorial(); });
+});
+document.querySelectorAll('[data-export]').forEach(btn=>{btn.onclick=()=>exportXlsx(btn.dataset.export);});
+function exportXlsx(which){
+  if(!RESULT)return;let rows,name;
+  if(which==='tras'){name='Traslados_entre_sucursales';
+    rows=RESULT.tras.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Sacar_de:r.from,Llevar_a:r.to,Vendio_destino:r.sold,Stock_destino:r.onHand,Mover:r.qty}));}
+  else if(which==='ideal'){name='Rotacion_stock_ideal';
+    rows=RESULT.idealRot.map(r=>({Grupo:r.grp,Talle:r.talle,Sacar_de:r.from,Llevar_a:r.to,
+      Stock_origen:r.origStock,Ideal_origen:r.origIdeal,Stock_destino:r.destStock,Ideal_destino:r.destIdeal,Mover:r.qty}));}
+  else if(which==='movil'){name='Rotar_inmovilizado';
+    rows=RESULT.movil.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Sacar_de:r.from,Llevar_a:r.to,Vendio_destino:r.sold,Mover:r.qty}));}
+  else if(which==='nosale'){name='Sin_salida';
+    rows=RESULT.nosale.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Sucursal:r.loc,Stock_inmovil:r.onHand}));}
+  else if(which==='curve'){name='Curvas_a_completar';
+    rows=RESULT.curve.map(r=>({Articulo:r.art,Descripcion:r.desc,Destino:r.dest,
+      Detalle_talles:Object.entries(r.talles).map(([k,v])=>k+':'+v).join(' '),Total:r.total,Origenes:r.froms.join(', ')}));}
+  else if(which==='pstock'){name='Distribucion_por_stock';
+    rows=RESULT.distStock.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Origen:r.from,Tipo:r.tipo,Destino:r.to,Tenia_origen:r.stockOrigen,Tenia_destino:r.teniaDest,Mover:r.qty}));}
+  else if(which==='hist'){name='Historial_de_planes';
+    rows=HIST.map(p=>{const tt=p.totales||{},pr=tt.prototipo||{};
+      return {Fecha:new Date(p.fecha).toLocaleString('es-AR'),Quien:p.usuario||'',Nota:p.nota||'',
+        Prototipos:(p.prototipos||[]).join(', '),
+        Reponer:pr.reponer||0,Rotar:pr.rotar||0,Calzado:pr.calzado||0,Contra_temporada:pr.contra||0,
+        Por_stock:pr.porStock||0,Inmovilizado:pr.inmovilizado||0,
+        Sin_repartir:tt.sinRepartir||0,Lineas:tt.lineas||0,
+        Dias_periodo:(p.parametros||{}).dias||'',Cobertura:(p.parametros||{}).cobertura||'',
+        Contra_max_talle:(p.parametros||{}).contraMaxTalle||'',Contra_criterio:(p.parametros||{}).contraCriterio||''};});}
+  else if(which==='calzado'){name='Calzado_curvas';
+    rows=RESULT.calzado.map(r=>({Articulo:r.art,Descripcion:r.desc,Color:r.color,Talle:r.talle,
+      Sacar_de:r.from,Origen:r.tipo||'',Llevar_a:r.to,Pares:r.qty}));}
+  else if(which==='contra'){name='Contra_temporada';
+    rows=RESULT.contra.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Sacar_de:r.from,Enviar_a:r.to,Vendio_verano:r.ventaVerano,Enviar:r.qty}))
+      .concat(RESULT.contraSobra.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Sacar_de:r.from,Enviar_a:'(queda sin repartir)',Vendio_verano:'',Enviar:r.qty,Motivo:r.motivo})));}
+  else if(which==='repo'){name='Reposicion_desde_deposito';
+    rows=RESULT.repo.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,
+      Sucursal:r.dest,Vendio:r.sold,Stock_actual:r.onHand,Habia_en_deposito:r.depo,Reponer:r.qty,
+      Queda_en_deposito:r.depoRestante,Prioridad:r.prio?'SI':''}));}
+  else if(which==='season'){name='Brecha_estacional';
+    rows=RESULT.season.map(r=>({Sucursal:r.loc,Familia:r.fam,Grupo:r.grp,Vendio_ano_pasado:r.prevSold,Objetivo:r.target,Stock_actual:r.cur,Brecha:r.gap,Estimado:r.estimado?'SI':'NO'}));}
+  else{name='Stock_parado';
+    rows=RESULT.dead.map(r=>({Articulo:r.art,Descripcion:r.desc,Grupo:r.grp,Color:r.color,Talle:r.talle,Sucursal:r.loc,Stock_parado:r.onHand}));}
+  if(!rows.length)rows=[{Aviso:'Sin datos'}];
+  const ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31));
+  XLSX.writeFile(wb,name+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+</script>
+</body>
+</html>
